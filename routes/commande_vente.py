@@ -49,7 +49,8 @@ def commande_vente():
         'rayon': 'famille',
         'famille': 'sous_famille',
         'sous_famille': 'code_article',
-        'code_article': None
+        'code_article': None,
+        'fournisseur': 'code_article'  # Nouveau
     }
     next_niveau = next_niveau_map.get(niveau)
     
@@ -267,8 +268,10 @@ def ajax_suggestions():
                 filtres['libelle_rayon'] = parent_filter
             elif niveau == 'sous_famille':
                 filtres['libelle_famille'] = parent_filter
-            elif niveau == 'code_article':
+            elif niveau == 'code_article' and parent_filter not in ['fournisseur']:
                 filtres['libelle_sous_famille'] = parent_filter
+            elif niveau == 'code_article' and request.args.get('from') == 'fournisseur':
+                filtres['nom_fournisseur'] = parent_filter
         
         # Récupérer les suggestions
         suggestions = get_suggestions_commande(
@@ -289,9 +292,71 @@ def ajax_suggestions():
         
     except Exception as e:
         print(f"Erreur dans ajax_suggestions: {e}")
+@commande_vente_bp.route('/articles')
+def commande_articles():
+    """Vue orientée articles/fournisseurs avec performances"""
+    from services.commande_article_fournisseur import get_suggestions_articles_fournisseurs, get_top_fournisseurs
+    
+    # Paramètres
+    annee = int(request.args.get('annee', 2025))
+    semaine_debut = int(request.args.get('semaine_debut', 1))
+    semaine_fin = int(request.args.get('semaine_fin', 27))
+    methode = request.args.get('methode', 'moyenne')
+    coverage = int(request.args.get('coverage', 21))
+    safety = float(request.args.get('safety', 1.2))
+    
+    # Filtres
+    filtres = {}
+    if request.args.get('departement'):
+        filtres['departement'] = request.args.get('departement')
+    if request.args.get('rayon'):
+        filtres['rayon'] = request.args.get('rayon')
+    if request.args.get('fournisseur'):
+        filtres['fournisseur'] = request.args.get('fournisseur')
+    
+    try:
+        # Récupérer les suggestions
+        suggestions = get_suggestions_articles_fournisseurs(
+            annee, semaine_debut, semaine_fin, methode, coverage, safety, filtres
+        )
+        
+        # Récupérer les top fournisseurs
+        top_fournisseurs = get_top_fournisseurs(annee, semaine_debut, semaine_fin)
+        
+        # Calculer les statistiques
+        stats = {
+            'total_articles': len(suggestions),
+            'articles_rupture': sum(1 for s in suggestions if s['rupture']),
+            'articles_stock_faible': sum(1 for s in suggestions if s['stock_faible']),
+            'montant_total': sum(s['montant_estime'] for s in suggestions if s['selected']),
+            'fournisseurs_uniques': len(set(s['fournisseur'] for s in suggestions))
+        }
+        
+        return render_template(
+            "commande_articles.html",
+            suggestions=suggestions,
+            stats=stats,
+            top_fournisseurs=top_fournisseurs,
+            annee=annee,
+            semaine_debut=semaine_debut,
+            semaine_fin=semaine_fin,
+            methode=methode,
+            coverage=coverage,
+            safety=safety,
+            filtres=filtres
+        )
+        
+    except Exception as e:
+        print(f"Erreur dans commande_articles: {e}")
         import traceback
         traceback.print_exc()
-        return f"<div class='alert alert-warning'>Erreur de chargement: {str(e)}</div>", 400
+        return render_template(
+            "commande_articles.html",
+            suggestions=[],
+            stats={},
+            top_fournisseurs=[],
+            error=str(e)
+        )
 
 @commande_vente_bp.route('/update_stock', methods=['POST'])
 def update_stock():

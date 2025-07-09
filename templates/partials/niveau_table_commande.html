@@ -23,13 +23,18 @@
                         <input type="checkbox" class="custom-checkbox check-all-{{ niveau }}">
                     </th>
                     <th style="width: 35%;">
-                        {% if niveau == 'rayon' %}Rayon{% elif niveau == 'famille' %}Famille{% elif niveau == 'libelle_sous_famille' %}Sous-famille{% else %}Article{% endif %}
+                        {% if niveau == 'rayon' %}Rayon{% elif niveau == 'famille' %}Famille{% elif niveau == 'libelle_sous_famille' %}Sous-famille{% elif niveau == 'code_article' %}Article{% elif niveau == 'fournisseur' %}Fournisseur{% else %}{{ niveau|title }}{% endif %}
                     </th>
                     <th class="text-center">Vente moy./sem</th>
                     <th class="text-center">Stock actuel</th>
                     <th class="text-center">Couverture (j)</th>
+                    <th class="text-center">PCB</th>
                     <th class="text-center">Qté suggérée</th>
+                    <th class="text-center">Qté PCB</th>
                     <th class="text-center">Qté à commander</th>
+                    <th class="text-center">Prix tarif</th>
+                    <th class="text-center">Montant</th>
+                    <th class="text-center">Marge %</th>
                     <th class="text-center">Tendance</th>
                     {% if niveau != 'code_article' %}
                     <th class="text-center">Actions</th>

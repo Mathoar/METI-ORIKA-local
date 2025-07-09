@@ -9,19 +9,6 @@ DB_PATH = "/Users/mhoar/Desktop/python_vscode/price_comparison.db"
 def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode, coverage=21, safety=1.2, filtres=None):
     """
     Génère des suggestions de commande basées sur l'analyse des ventes
-    
-    Args:
-        annee: Année d'analyse
-        semaine_debut: Semaine de début
-        semaine_fin: Semaine de fin
-        niveau: Niveau d'agrégation (departement, rayon, famille, sous_famille, code_article)
-        methode: Méthode de calcul (moyenne, tendance, pic)
-        coverage: Couverture cible en jours
-        safety: Coefficient de sécurité
-        filtres: Filtres additionnels
-    
-    Returns:
-        Liste des suggestions avec quantités recommandées
     """
     conn = sqlite3.connect(DB_PATH)
     
@@ -32,23 +19,54 @@ def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode,
             'rayon': ('rayon', 'libelle_rayon'),
             'famille': ('famille', 'libelle_famille'),
             'sous_famille': ('libelle_sous_famille', 'libelle_sous_famille'),
-            'code_article': ('code_article', 'libelle_article')
+            'code_article': ('code_article', 'libelle_article'),
+            'fournisseur': ('nom_fournisseur', 'nom_fournisseur')
         }
         
         group_by, label_field = niveau_config.get(niveau, ('departement', 'libelle_departement'))
         
-        # Requête pour les ventes
-        query_ventes = f"""
-            SELECT 
-                {group_by},
-                {label_field},
-                semaine,
-                SUM(ca) as ca,
-                SUM(qte) as qte
-            FROM vente_meti
-            WHERE annee = ?
-              AND semaine BETWEEN ? AND ?
-        """
+        # Requête simplifiée pour SQLite
+        # Si group_by et label_field sont identiques, ne sélectionner qu'une fois
+        if group_by == label_field:
+            query_ventes = f"""
+                SELECT 
+                    {group_by},
+                    semaine,
+                    SUM(ca) as ca,
+                    SUM(qte) as qte,
+                    AVG(prix_tarif) as prix_tarif_moyen,
+                    AVG(prix_de_vente) as prix_vente_moyen,
+                    MIN(pcb) as pcb_min,
+                    MAX(pcb) as pcb_max,
+                    MIN(pcb_mini_commandable) as pcb_mini,
+                    AVG(marge) as marge_moyenne,
+                    COUNT(DISTINCT code_article) as nb_articles
+                FROM vente_meti
+                WHERE annee = ?
+                  AND semaine BETWEEN ? AND ?
+            """
+        else:
+            query_ventes = f"""
+                SELECT 
+                    {group_by},
+                    {label_field},
+                    semaine,
+                    SUM(ca) as ca,
+                    SUM(qte) as qte,
+                    AVG(prix_tarif) as prix_tarif_moyen,
+                    AVG(prix_de_vente) as prix_vente_moyen,
+                    MIN(pcb) as pcb_min,
+                    MAX(pcb) as pcb_max,
+                    MIN(pcb_mini_commandable) as pcb_mini,
+                    AVG(marge) as marge_moyenne,
+                    COUNT(DISTINCT code_article) as nb_articles
+                FROM vente_meti
+                WHERE annee = ?
+                  AND semaine BETWEEN ? AND ?
+            """
+        
+        # Ajouter le filtre sur commandable si on a l'info
+        query_ventes += " AND (commandable = 'O' OR commandable IS NULL)"
         
         params = [annee, semaine_debut, semaine_fin]
         
@@ -58,33 +76,80 @@ def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode,
                 query_ventes += f" AND {k} = ?"
                 params.append(v)
         
-        query_ventes += f" GROUP BY {group_by}, {label_field}, semaine"
+        if group_by == label_field:
+            query_ventes += f" GROUP BY {group_by}, semaine"
+        else:
+            query_ventes += f" GROUP BY {group_by}, {label_field}, semaine"
+        
+        print(f"Query: {query_ventes}")  # Debug
+        print(f"Params: {params}")  # Debug
         
         # Exécuter la requête
         df_ventes = pd.read_sql_query(query_ventes, conn, params=params)
         
-        # Requête pour le stock actuel (si niveau article)
+        print(f"Nombre de lignes récupérées: {len(df_ventes)}")  # Debug
+        
+        if df_ventes.empty:
+            print("Aucune donnée trouvée")
+            return []
+        
+        # Requête pour récupérer les infos fournisseur (séparément)
+        if group_by == label_field:
+            query_fournisseurs = f"""
+                SELECT DISTINCT
+                    {group_by},
+                    GROUP_CONCAT(DISTINCT nom_fournisseur) as fournisseurs_list
+                FROM vente_meti
+                WHERE annee = ?
+                  AND semaine BETWEEN ? AND ?
+            """
+        else:
+            query_fournisseurs = f"""
+                SELECT DISTINCT
+                    {group_by},
+                    GROUP_CONCAT(DISTINCT nom_fournisseur) as fournisseurs_list
+                FROM vente_meti
+                WHERE annee = ?
+                  AND semaine BETWEEN ? AND ?
+            """
+        
+        if filtres:
+            for k, v in filtres.items():
+                query_fournisseurs += f" AND {k} = ?"
+        
+        query_fournisseurs += f" GROUP BY {group_by}"
+        
+        df_fournisseurs = pd.read_sql_query(query_fournisseurs, conn, params=params)
+        
+        # Requête pour le stock actuel
+        df_stock = pd.DataFrame()
         if niveau == 'code_article':
             query_stock = """
                 SELECT 
                     code_article,
-                    SUM(stock_actuel) as stock_actuel,
-                    AVG(prix_achat) as prix_moyen
+                    stock_actuel,
+                    prix_achat
                 FROM stock_actuel
-                GROUP BY code_article
             """
             df_stock = pd.read_sql_query(query_stock, conn)
-        else:
-            # Pour les autres niveaux, on simule un stock agrégé
-            df_stock = pd.DataFrame()
         
         # Calculer les suggestions
         suggestions = []
         
         # Grouper par article/niveau
-        grouped = df_ventes.groupby([group_by, label_field])
+        # Si group_by et label_field sont identiques, ne grouper que par un seul
+        if group_by == label_field:
+            grouped = df_ventes.groupby([group_by])
+        else:
+            grouped = df_ventes.groupby([group_by, label_field])
         
-        for (code, libelle), group_data in grouped:
+        for group_key, group_data in grouped:
+            # Gérer le cas où on a un seul niveau de groupement
+            if group_by == label_field:
+                code = group_key
+                libelle = group_key
+            else:
+                code, libelle = group_key
             # Calculer les métriques de vente
             ventes_semaine = group_data.groupby('semaine')['qte'].sum()
             nb_semaines = len(ventes_semaine)
@@ -96,18 +161,15 @@ def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode,
             if methode == 'moyenne':
                 vente_moyenne_hebdo = ventes_semaine.mean()
             elif methode == 'tendance':
-                # Calcul de la tendance linéaire
                 if nb_semaines > 1:
                     x = np.arange(nb_semaines)
                     y = ventes_semaine.values
                     z = np.polyfit(x, y, 1)
-                    # Projection pour la prochaine semaine
                     vente_moyenne_hebdo = z[0] * nb_semaines + z[1]
                     vente_moyenne_hebdo = max(0, vente_moyenne_hebdo)
                 else:
                     vente_moyenne_hebdo = ventes_semaine.mean()
             elif methode == 'pic':
-                # Utiliser le pic de vente
                 vente_moyenne_hebdo = ventes_semaine.max()
             else:
                 vente_moyenne_hebdo = ventes_semaine.mean()
@@ -115,63 +177,93 @@ def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode,
             # Conversion en vente journalière
             vente_moyenne_jour = vente_moyenne_hebdo / 7
             
-            # Stock actuel (si disponible)
+            # Récupérer les informations agrégées depuis les données moyennes
+            prix_tarif = float(group_data['prix_tarif_moyen'].mean()) if pd.notna(group_data['prix_tarif_moyen'].mean()) else 0
+            prix_vente = float(group_data['prix_vente_moyen'].mean()) if pd.notna(group_data['prix_vente_moyen'].mean()) else 0
+            pcb = int(group_data['pcb_min'].min()) if pd.notna(group_data['pcb_min'].min()) and group_data['pcb_min'].min() > 0 else 1
+            pcb_mini = int(group_data['pcb_mini'].min()) if pd.notna(group_data['pcb_mini'].min()) and group_data['pcb_mini'].min() > 0 else pcb
+            marge = float(group_data['marge_moyenne'].mean()) if pd.notna(group_data['marge_moyenne'].mean()) else 0
+            nb_articles = int(group_data['nb_articles'].mean()) if pd.notna(group_data['nb_articles'].mean()) else 1
+            
+            # Récupérer les fournisseurs
+            fournisseurs = ''
+            if not df_fournisseurs.empty:
+                frs_row = df_fournisseurs[df_fournisseurs[group_by] == code]
+                if not frs_row.empty:
+                    fournisseurs = frs_row['fournisseurs_list'].values[0] or ''
+            
+            # Stock actuel
             stock_actuel = 0
-            prix_moyen = 0
             if niveau == 'code_article' and not df_stock.empty:
                 stock_row = df_stock[df_stock['code_article'] == code]
                 if not stock_row.empty:
-                    stock_actuel = stock_row['stock_actuel'].values[0] or 0
-                    prix_moyen = stock_row['prix_moyen'].values[0] or 0
+                    stock_actuel = float(stock_row['stock_actuel'].values[0]) if pd.notna(stock_row['stock_actuel'].values[0]) else 0
             
             # Calcul de la couverture actuelle
             if vente_moyenne_jour > 0:
                 couverture_actuelle = stock_actuel / vente_moyenne_jour
             else:
-                couverture_actuelle = 999  # Stock infini si pas de vente
+                couverture_actuelle = 999 if stock_actuel > 0 else 0
             
             # Calcul de la quantité suggérée
             besoin_theorique = vente_moyenne_jour * coverage * safety
             quantite_suggeree = max(0, besoin_theorique - stock_actuel)
             
+            # Arrondir au PCB supérieur
+            quantite_suggeree_pcb = quantite_suggeree
+            if pcb > 1 and quantite_suggeree > 0:
+                quantite_suggeree_pcb = np.ceil(quantite_suggeree / pcb) * pcb
+            
+            # Vérifier le PCB minimum
+            if quantite_suggeree_pcb > 0 and quantite_suggeree_pcb < pcb_mini:
+                quantite_suggeree_pcb = pcb_mini
+            
             # Calcul de la tendance
+            tendance = 0
             if nb_semaines >= 2:
-                debut = ventes_semaine.iloc[:nb_semaines//2].mean()
-                fin = ventes_semaine.iloc[nb_semaines//2:].mean()
+                debut = ventes_par_semaine.iloc[:nb_semaines//2].mean()
+                fin = ventes_par_semaine.iloc[nb_semaines//2:].mean()
                 if debut > 0:
                     tendance = ((fin - debut) / debut) * 100
-                else:
-                    tendance = 0
-            else:
-                tendance = 0
             
             # Déterminer les alertes
             rupture = stock_actuel == 0 and vente_moyenne_jour > 0
             stock_faible = couverture_actuelle < 7 and not rupture
             recommande = (tendance > 10) or rupture or stock_faible
             
-            # CA moyen
+            # CA moyen et montant estimé
             ca_moyen = group_data['ca'].sum() / nb_semaines
+            montant_estime = quantite_suggeree_pcb * prix_tarif
             
             suggestions.append({
                 'id': str(abs(hash(f"{code}_{libelle}"))),
-                'code': code,
-                'libelle': libelle,
+                'code': str(code),
+                'libelle': str(libelle),
                 'vente_moyenne': round(vente_moyenne_hebdo, 0),
                 'stock_actuel': round(stock_actuel, 0),
                 'couverture': round(couverture_actuelle, 0),
                 'quantite_suggeree': round(quantite_suggeree, 0),
+                'quantite_suggeree_pcb': round(quantite_suggeree_pcb, 0),
+                'pcb': pcb,
+                'pcb_mini': pcb_mini,
                 'tendance': round(tendance, 1),
                 'ca_moyen': ca_moyen,
-                'prix_moyen': prix_moyen,
+                'prix_tarif': prix_tarif,
+                'prix_vente': prix_vente,
+                'marge': round(marge, 1),
+                'montant_estime': montant_estime,
+                'fournisseurs': fournisseurs,
+                'nb_articles': nb_articles if niveau != 'code_article' else 1,
                 'rupture': rupture,
                 'stock_faible': stock_faible,
                 'recommande': recommande,
-                'selected': recommande  # Pré-sélectionner les articles recommandés
+                'selected': recommande
             })
         
-        # Trier par quantité suggérée décroissante
-        suggestions.sort(key=lambda x: x['quantite_suggeree'], reverse=True)
+        # Trier par montant estimé décroissant
+        suggestions.sort(key=lambda x: x['montant_estime'], reverse=True)
+        
+        print(f"Nombre de suggestions: {len(suggestions)}")  # Debug
         
         return suggestions
         

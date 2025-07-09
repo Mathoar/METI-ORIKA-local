@@ -328,8 +328,13 @@
                                     <th class="text-center">Vente moy./sem</th>
                                     <th class="text-center">Stock actuel</th>
                                     <th class="text-center">Couverture (j)</th>
+                                    <th class="text-center">PCB</th>
                                     <th class="text-center">Qté suggérée</th>
+                                    <th class="text-center">Qté PCB</th>
                                     <th class="text-center">Qté à commander</th>
+                                    <th class="text-center">Prix tarif</th>
+                                    <th class="text-center">Montant</th>
+                                    <th class="text-center">Marge %</th>
                                     <th class="text-center">Tendance</th>
                                     <th class="text-center">Actions</th>
                                 </tr>
@@ -344,6 +349,11 @@
                                     </td>
                                     <td>
                                         <strong>{{ item.libelle }}</strong>
+                                        {% if item.fournisseurs %}
+                                            <div class="text-muted small">
+                                                <i class="fas fa-truck mr-1"></i>{{ item.fournisseurs }}
+                                            </div>
+                                        {% endif %}
                                         {% if item.recommande %}
                                             <span class="recommended-badge">Recommandé</span>
                                         {% endif %}
@@ -354,6 +364,11 @@
                                         {% elif item.stock_faible %}
                                             <div class="text-warning" style="font-size: 0.8em;">
                                                 <i class="fas fa-exclamation-triangle"></i> Stock faible
+                                            </div>
+                                        {% endif %}
+                                        {% if niveau != 'code_article' and item.nb_articles > 1 %}
+                                            <div class="text-info small">
+                                                <i class="fas fa-boxes mr-1"></i>{{ item.nb_articles }} articles
                                             </div>
                                         {% endif %}
                                     </td>
@@ -384,7 +399,43 @@
                                         </span>
                                     </td>
                                     <td class="text-center">
-                                        <strong id="suggere_{{ item.id }}">{{ "{:,.0f}".format(item.quantite_suggeree) }}</strong>
+                                        <span class="badge badge-secondary">{{ item.pcb }}</span>
+                                        {% if item.pcb_mini > item.pcb %}
+                                            <br><small class="text-muted">Min: {{ item.pcb_mini }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span id="suggere_{{ item.id }}">{{ "{:,.0f}".format(item.quantite_suggeree) }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <strong class="text-primary" id="suggere_pcb_{{ item.id }}">{{ "{:,.0f}".format(item.quantite_suggeree_pcb) }}</strong>
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" 
+                                               class="form-control quantity-input" 
+                                               id="qty_{{ item.id }}"
+                                               value="{{ item.quantite_suggeree_pcb }}"
+                                               min="0"
+                                               step="{{ item.pcb }}"
+                                               data-pcb="{{ item.pcb }}"
+                                               data-pcb-mini="{{ item.pcb_mini }}"
+                                               onchange="validatePCB('{{ item.id }}'); updateTotal()">
+                                    </td>
+                                    <td class="text-center">
+                                        {{ "{:,.2f}".format(item.prix_tarif) }}€
+                                    </td>
+                                    <td class="text-center">
+                                        <strong id="montant_{{ item.id }}">{{ "{:,.0f}".format(item.montant_estime) }}€</strong>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge badge-{% if item.marge > 30 %}success{% elif item.marge > 20 %}warning{% else %}danger{% endif %}">
+                                            {{ "{:.1f}".format(item.marge) }}%
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="trend-badge {% if item.tendance > 5 %}trend-up{% elif item.tendance < -5 %}trend-down{% else %}trend-stable{% endif %}">
+                                            {% if item.tendance > 0 %}+{% endif %}{{ item.tendance }}%
+                                        </span>
                                     </td>
                                     <td class="text-center">
                                         <input type="number" 
@@ -513,14 +564,18 @@ function updateTotal() {
         count++;
         const id = $(this).data('id');
         const qty = parseInt($('#qty_' + id).val()) || 0;
+        const item = {{ suggestions|tojson }}.find(i => i.id === id);
+        
         quantity += qty;
-        // Calcul du montant estimé (à adapter selon vos données)
-        amount += qty * 10; // Prix moyen temporaire
+        
+        if (item) {
+            amount += qty * item.prix_tarif;
+        }
     });
 
     $('#selected-count').text(count);
     $('#total-quantity').text(quantity.toLocaleString());
-    $('#total-amount').text(amount.toLocaleString() + '€');
+    $('#total-amount').text(amount.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + '€');
 }
 
 // Validation de la commande
@@ -594,10 +649,51 @@ $(document).ready(function() {
     updateTotal();
 });
 
+// Fonction pour valider le PCB
+function validatePCB(itemId) {
+    const qtyInput = $('#qty_' + itemId);
+    const qty = parseInt(qtyInput.val()) || 0;
+    const pcb = parseInt(qtyInput.data('pcb')) || 1;
+    const pcbMini = parseInt(qtyInput.data('pcb-mini')) || pcb;
+    
+    // Si la quantité n'est pas un multiple du PCB
+    if (qty > 0 && qty % pcb !== 0) {
+        // Arrondir au PCB supérieur
+        const newQty = Math.ceil(qty / pcb) * pcb;
+        qtyInput.val(newQty);
+        
+        showNotification(`Quantité ajustée au PCB (${pcb})`, 'info');
+    }
+    
+    // Vérifier le minimum
+    if (qty > 0 && qty < pcbMini) {
+        qtyInput.val(pcbMini);
+        showNotification(`Quantité minimale: ${pcbMini}`, 'warning');
+    }
+    
+    // Mettre à jour le montant
+    updateMontantLigne(itemId);
+}
+
+// Fonction pour mettre à jour le montant d'une ligne
+function updateMontantLigne(itemId) {
+    const qty = parseInt($('#qty_' + itemId).val()) || 0;
+    const item = {{ suggestions|tojson }}.find(i => i.id === itemId);
+    
+    if (item) {
+        const montant = qty * item.prix_tarif;
+        $('#montant_' + itemId).text(montant.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + '€');
+    }
+}
+
 // Fonction pour mettre à jour le stock et recalculer
 function updateStockAndRecalculate(itemId) {
     const stockValue = parseInt($('#stock_' + itemId).val()) || 0;
-    const venteMoyenne = {{ suggestions|tojson }}.find(item => item.id === itemId)?.vente_moyenne || 0;
+    const item = {{ suggestions|tojson }}.find(item => item.id === itemId);
+    
+    if (!item) return;
+    
+    const venteMoyenne = item.vente_moyenne || 0;
     const venteMoyenneJour = venteMoyenne / 7;
     
     // Recalculer la couverture
@@ -629,16 +725,30 @@ function updateStockAndRecalculate(itemId) {
     const besoinTheorique = venteMoyenneJour * coverageTarget * safetyFactor;
     const quantiteSuggeree = Math.max(0, Math.round(besoinTheorique - stockValue));
     
+    // Calculer la quantité PCB
+    const pcb = item.pcb || 1;
+    const pcbMini = item.pcb_mini || pcb;
+    let quantitePCB = 0;
+    
+    if (quantiteSuggeree > 0) {
+        quantitePCB = Math.ceil(quantiteSuggeree / pcb) * pcb;
+        if (quantitePCB < pcbMini) {
+            quantitePCB = pcbMini;
+        }
+    }
+    
     // Mettre à jour l'affichage
     $('#suggere_' + itemId).text(quantiteSuggeree.toLocaleString());
+    $('#suggere_pcb_' + itemId).text(quantitePCB.toLocaleString());
     
     // Mettre à jour aussi la quantité à commander si elle n'a pas été modifiée manuellement
     const qtyInput = $('#qty_' + itemId);
     if (!qtyInput.data('manually-changed')) {
-        qtyInput.val(quantiteSuggeree);
+        qtyInput.val(quantitePCB);
+        updateMontantLigne(itemId);
     }
     
-    // Marquer le stock comme modifié (changer la couleur de fond)
+    // Marquer le stock comme modifié
     $('#stock_' + itemId).addClass('stock-modified');
 }
 

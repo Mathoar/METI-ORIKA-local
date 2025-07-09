@@ -1,8 +1,6 @@
 import os
 import sqlite3
 import logging
-from flask import current_app
-from services.utils import DB_NAME  # si besoin
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +15,6 @@ def init_db():
     try:
         with sqlite3.connect(path) as conn:
             cursor = conn.cursor()
-
-            # 🔄 Supprimer les anciennes tables
-            cursor.executescript("""
-                DROP TABLE IF EXISTS analyse_cde;
-                DROP TABLE IF EXISTS vente_meti;
-            """)
-            logger.info("✅ Tables supprimées")
 
             # Table meti
             cursor.execute("""
@@ -437,3 +428,28 @@ def populate_stock_actuel_from_stock():
     except Exception as e:
         logger.error(f"❌ Erreur lors du peuplement de stock_actuel : {e}")
         raise
+
+# Section pour exécution directe
+if __name__ == "__main__":
+    # Configuration du logging pour l'exécution directe
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    print("🚀 Initialisation de la base de données...")
+    
+    try:
+        init_db()
+        print("\n✅ Base de données initialisée avec succès!")
+        
+        # Optionnel : migrer les données de stock
+        response = input("\n📦 Voulez-vous migrer les données de la table 'stock' vers 'stock_actuel'? (o/n): ")
+        if response.lower() == 'o':
+            populate_stock_actuel_from_stock()
+            print("✅ Migration terminée!")
+            
+    except Exception as e:
+        print(f"\n❌ Erreur: {e}")
+        import traceback
+        traceback.print_exc()
