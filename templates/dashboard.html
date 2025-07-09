@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Price Comparison Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+<div class="container mt-4">
+    <h1>Tableau de Bord</h1>
+
+    <!-- Onglets de navigation -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if request.path == url_for('dashboard.dashboard') %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith(url_for('fournisseurs.fournisseurs')) %}active{% endif %}" href="{{ url_for('fournisseurs.fournisseurs') }}">Fournisseurs</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith(url_for('upload_stock.stock')) %}active{% endif %}" href="{{ url_for('upload_stock.stock') }}">Stock</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith('/visualisation') %}active{% endif %}" href="{{ url_for('visualisation.visualisation') }}">Visualisation</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith(url_for('analyse_cde.analyse_commande')) %}active{% endif %}" href="{{ url_for('analyse_cde.analyse_commande') }}">Analyse Commande</a>
+        </li>
+        <!-- Nouveau lien vers la page de création de la base de données -->
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith(url_for('fournisseur_actif.create_frs_db')) %}active{% endif %}" href="{{ url_for('fournisseur_actif.fournisseur_actif_page') }}">Créer BD Fournisseurs</a>
+        </li>
+    </ul>
+
+    {% if success_message %}
+    <div class="alert alert-success">✅ {{ success_message }}</div>
+    {% elif error_message %}
+    <div class="alert alert-danger">❌ {{ error_message }}</div>
+    {% endif %}
+
+    <!-- Formulaire Upload -->
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('upload.upload') }}">
+        <div class="form-group">
+            <label for="meti_file">Fichier METI (.xlsx)</label>
+            <input type="file" name="meti_file" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="header_row">Ligne d’en-tête METI :</label>
+            <input type="number" name="header_row" class="form-control" min="1" required>
+        </div>
+        <div class="form-group">
+            <label for="data_row">Première ligne de données METI :</label>
+            <input type="number" name="data_row" class="form-control" min="2" required>
+        </div>
+        <div class="form-group">
+            <label for="orika_file">Fichier ORIKA (.csv)</label>
+            <input type="file" name="orika_file" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="vente_meti_file">Fichier Vente METI (.xlsx)</label>
+            <input type="file" name="vente_meti_file" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+    </form>
+
+    <!-- Synthèse -->
+    <h2>Synthèse des données</h2>
+    <div class="row">
+        <div class="col-md-6">
+            <h4>METI</h4>
+            <ul>
+                <li>Nombre de lignes : {{ meti_summary.nb_lignes }}</li>
+                <li>Articles distincts : {{ meti_summary.nb_articles }}</li>
+                <li>CA Total : {{ meti_summary.ca_total }} €</li>
+                <li>Passage Total : {{ meti_summary.passage_total }}</li>
+                <li>Marge Totale : {{ meti_summary.marge_total }} €</li>
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h4>ORIKA</h4>
+            <ul>
+                <li>Nombre de lignes : {{ orika_summary.nb_lignes }}</li>
+                <li>Articles distincts : {{ orika_summary.nb_articles }}</li>
+                <li>CA Total : {{ orika_summary.ca_total }} €</li>
+                <li>Passage Total : {{ orika_summary.passage_total }}</li>
+                <li>Marge Totale : {{ orika_summary.marge_total }} €</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Onglets de données -->
+    <ul class="nav nav-tabs mt-4" id="dataTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="meti-tab" data-toggle="tab" href="#meti" role="tab">METI Data</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="orika-tab" data-toggle="tab" href="#orika" role="tab">ORIKA Data</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="vente-meti-tab" data-toggle="tab" href="#vente-meti" role="tab">Vente METI Data</a>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        <!-- METI -->
+        <div class="tab-pane fade show active" id="meti" role="tabpanel">
+            {% if meti_rows %}
+            <table class="table table-bordered table-sm">
+                <thead class="thead-light">
+                <tr>
+                    <th>Generated ID</th>
+                    <th>Generated Article</th>
+                    <th>CA HT</th>
+                    <th>Passage</th>
+                    <th>Marge</th>
+                    <th>PM</th>
+                    <th>TDM</th>
+                    <th>Poids Promo</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in meti_rows %}
+                <tr>
+                    {% for col in row %}
+                    <td>{{ "%.2f"|format(col) if col is number else col }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Aucune donnée METI disponible.</p>
+            {% endif %}
+        </div>
+
+        <!-- ORIKA -->
+        <div class="tab-pane fade" id="orika" role="tabpanel">
+            {% if orika_preview %}
+            <h5>Aperçu ORIKA (trié par CA TTC)</h5>
+            <table class="table table-bordered table-sm">
+                <thead class="thead-light">
+                <tr>
+                    {% for col in orika_columns %}
+                    <th>{{ col | upper }}</th>
+                    {% endfor %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in orika_preview %}
+                <tr>
+                    {% for cell in row %}
+                    <td>{{ "%.2f"|format(cell) if cell is number else cell }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Aucune donnée ORIKA disponible.</p>
+            {% endif %}
+        </div>
+
+        <!-- VENTE METI -->
+        <div class="tab-pane fade" id="vente-meti" role="tabpanel">
+            {% if vente_meti_rows %}
+            <h5>Aperçu Vente METI (trié par CA HT)</h5>
+            <table class="table table-bordered table-sm">
+                <thead class="thead-light">
+                <tr>
+                    {% for col in vente_meti_columns %}
+                    <th>{{ col | upper }}</th>
+                    {% endfor %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in vente_meti_rows %}
+                <tr>
+                    {% for cell in row %}
+                    <td>{{ "%.2f"|format(cell) if cell is number else cell }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Aucune donnée Vente METI disponible.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+</body>
+</html>

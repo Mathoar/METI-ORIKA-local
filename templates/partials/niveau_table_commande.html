@@ -1,0 +1,379 @@
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 text-muted">
+            <i class="fas fa-{% if niveau == 'rayon' %}layer-group{% elif niveau == 'famille' %}tags{% elif niveau == 'libelle_sous_famille' %}tag{% else %}cube{% endif %} mr-2"></i>
+            {% if niveau == 'rayon' %}Rayons{% elif niveau == 'famille' %}Familles{% elif niveau == 'libelle_sous_famille' %}Sous-familles{% else %}Articles{% endif %} 
+            ({{ suggestions|length }})
+        </h6>
+        <div>
+            <button class="btn btn-sm btn-outline-primary" onclick="selectAllInTable('{{ niveau }}')">
+                <i class="fas fa-check-square mr-1"></i>Sélectionner
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllInTable('{{ niveau }}')">
+                <i class="fas fa-square mr-1"></i>Désélectionner
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-{{ niveau }}">
+                <thead>
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" class="custom-checkbox check-all-{{ niveau }}">
+                    </th>
+                    <th style="width: 35%;">
+                        {% if niveau == 'rayon' %}Rayon{% elif niveau == 'famille' %}Famille{% elif niveau == 'libelle_sous_famille' %}Sous-famille{% else %}Article{% endif %}
+                    </th>
+                    <th class="text-center">Vente moy./sem</th>
+                    <th class="text-center">Stock actuel</th>
+                    <th class="text-center">Couverture (j)</th>
+                    <th class="text-center">Qté suggérée</th>
+                    <th class="text-center">Qté à commander</th>
+                    <th class="text-center">Tendance</th>
+                    {% if niveau != 'code_article' %}
+                    <th class="text-center">Actions</th>
+                    {% endif %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for item in suggestions %}
+                <tr class="
+                    {% if niveau == 'rayon' %}niveau-2{% elif niveau == 'famille' %}niveau-3{% elif niveau == 'libelle_sous_famille' %}niveau-4{% elif niveau == 'code_article' %}niveau-5{% endif %}
+                    {% if item.rupture %}table-danger{% elif item.stock_faible %}table-warning{% endif %}
+                ">
+                    <td>
+                        <input type="checkbox" class="custom-checkbox item-check item-check-{{ niveau }}" 
+                               data-id="{{ item.id }}"
+                               data-niveau="{{ niveau }}"
+                               {% if item.selected %}checked{% endif %}>
+                    </td>
+                    <td>
+                        {% if niveau != 'code_article' %}
+                            <a href="#" class="niveau-suivant-commande"
+                               data-niveau="{{ niveau }}"
+                               data-parent-value="{{ item.libelle }}"
+                               data-target-id="sous_commande_{{ niveau }}_{{ loop.index }}">
+                                <i class="fas fa-plus-circle expand-icon"></i>
+                                <strong>{{ item.libelle }}</strong>
+                            </a>
+                        {% else %}
+                            <div class="article-info">
+                                <span class="article-code">{{ item.code }}</span>
+                                <span class="article-libelle"><strong>{{ item.libelle }}</strong></span>
+                            </div>
+                        {% endif %}
+                        {% if item.recommande %}
+                            <span class="recommended-badge">Recommandé</span>
+                        {% endif %}
+                        {% if item.rupture %}
+                            <div class="stock-alert">
+                                <i class="fas fa-exclamation-circle"></i> Rupture de stock
+                            </div>
+                        {% elif item.stock_faible %}
+                            <div class="text-warning" style="font-size: 0.8em;">
+                                <i class="fas fa-exclamation-triangle"></i> Stock faible
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ "{:,.0f}".format(item.vente_moyenne) }}</td>
+                    <td class="text-center">
+                        <div class="input-group input-group-sm" style="width: 120px; margin: 0 auto;">
+                            <input type="number" 
+                                   class="form-control stock-input text-center" 
+                                   id="stock_{{ item.id }}"
+                                   data-id="{{ item.id }}"
+                                   data-code="{{ item.code }}"
+                                   data-libelle="{{ item.libelle }}"
+                                   data-vente-moyenne="{{ item.vente_moyenne }}"
+                                   value="{{ item.stock_actuel }}"
+                                   min="0"
+                                   onchange="updateStockAndRecalculatePartial('{{ item.id }}', '{{ niveau }}')">
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-secondary btn-sm" 
+                                        type="button" 
+                                        onclick="saveStockPartial('{{ item.id }}', '{{ niveau }}')"
+                                        title="Sauvegarder le stock">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge badge-{% if item.couverture < 7 %}danger{% elif item.couverture < 14 %}warning{% else %}success{% endif %}"
+                              id="couverture_{{ item.id }}">
+                            {{ item.couverture }}j
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <strong id="suggere_{{ item.id }}">{{ "{:,.0f}".format(item.quantite_suggeree) }}</strong>
+                    </td>
+                    <td class="text-center">
+                        <input type="number" 
+                               class="form-control quantity-input qty-{{ niveau }}" 
+                               id="qty_{{ item.id }}"
+                               value="{{ item.quantite_suggeree }}"
+                               min="0"
+                               data-niveau="{{ niveau }}"
+                               onchange="updateTotalForNiveau('{{ niveau }}')">
+                    </td>
+                    <td class="text-center">
+                        <span class="trend-badge {% if item.tendance > 5 %}trend-up{% elif item.tendance < -5 %}trend-down{% else %}trend-stable{% endif %}">
+                            {% if item.tendance > 0 %}+{% endif %}{{ item.tendance }}%
+                        </span>
+                    </td>
+                    {% if niveau != 'code_article' %}
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary btn-detail-commande" 
+                                data-niveau="{{ niveau }}"
+                                data-parent-value="{{ item.libelle }}"
+                                data-target-id="sous_commande_{{ niveau }}_{{ loop.index }}"
+                                title="Voir le détail">
+                            <i class="fas fa-search-plus"></i>
+                        </button>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% if niveau != 'code_article' %}
+                <tr class="sous-niveau d-none" id="sous_commande_{{ niveau }}_{{ loop.index }}">
+                    <td colspan="{% if niveau == 'code_article' %}8{% else %}9{% endif %}" class="p-0 border-0"></td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+                {% if suggestions|length > 1 %}
+                <tfoot>
+                <tr class="total-row">
+                    <td colspan="2"><strong>Total {{ niveau|replace('_', ' ')|title }}</strong></td>
+                    <td class="text-center">
+                        <strong id="total-vente-{{ niveau }}">{{ "{:,.0f}".format(suggestions|sum(attribute='vente_moyenne')) }}</strong>
+                    </td>
+                    <td class="text-center">
+                        <strong id="total-stock-{{ niveau }}">{{ "{:,.0f}".format(suggestions|sum(attribute='stock_actuel')) }}</strong>
+                    </td>
+                    <td class="text-center">-</td>
+                    <td class="text-center">
+                        <strong id="total-suggere-{{ niveau }}">{{ "{:,.0f}".format(suggestions|sum(attribute='quantite_suggeree')) }}</strong>
+                    </td>
+                    <td class="text-center">
+                        <strong id="total-commande-{{ niveau }}">0</strong>
+                    </td>
+                    <td class="text-center">-</td>
+                    {% if niveau != 'code_article' %}
+                    <td></td>
+                    {% endif %}
+                </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Gestion des checkboxes pour ce niveau
+$('.check-all-{{ niveau }}').on('change', function() {
+    $('.item-check-{{ niveau }}').prop('checked', $(this).prop('checked'));
+    updateTotalForNiveau('{{ niveau }}');
+});
+
+$('.item-check-{{ niveau }}').on('change', function() {
+    updateTotalForNiveau('{{ niveau }}');
+});
+
+// Fonction pour sélectionner tout dans ce tableau
+function selectAllInTable(niveau) {
+    $('.item-check-' + niveau).prop('checked', true);
+    $('.check-all-' + niveau).prop('checked', true);
+    updateTotalForNiveau(niveau);
+}
+
+// Fonction pour désélectionner tout dans ce tableau
+function deselectAllInTable(niveau) {
+    $('.item-check-' + niveau).prop('checked', false);
+    $('.check-all-' + niveau).prop('checked', false);
+    updateTotalForNiveau(niveau);
+}
+
+// Mise à jour des totaux pour ce niveau
+function updateTotalForNiveau(niveau) {
+    let totalCommande = 0;
+    
+    $('.item-check-' + niveau + ':checked').each(function() {
+        const id = $(this).data('id');
+        const qty = parseInt($('#qty_' + id).val()) || 0;
+        totalCommande += qty;
+    });
+    
+    $('#total-commande-' + niveau).text(totalCommande.toLocaleString());
+    
+    // Mettre à jour aussi le total général
+    updateTotal();
+}
+
+// Navigation vers sous-niveau pour commande
+$(document).on("click", ".niveau-suivant-commande", function(e) {
+    e.preventDefault();
+    loadSousNiveauCommande($(this));
+});
+
+// Bouton détail
+$(document).on("click", ".btn-detail-commande", function(e) {
+    e.preventDefault();
+    loadSousNiveauCommande($(this));
+});
+
+function loadSousNiveauCommande(btn) {
+    const niveau = btn.data("niveau");
+    const parentValue = btn.data("parent-value");
+    const targetId = "#" + btn.data("target-id");
+    const icon = btn.find('.expand-icon');
+    
+    // Toggle ouverture/fermeture
+    if (!$(targetId).hasClass("d-none")) {
+        $(targetId).slideUp(200, function() {
+            $(this).addClass("d-none").html('<td colspan="100%"></td>');
+        });
+        if (icon.length) {
+            icon.removeClass("fa-minus-circle").addClass("fa-plus-circle");
+        }
+        return;
+    }
+    
+    // Indicateur de chargement
+    if (icon.length) {
+        icon.removeClass("fa-plus-circle fa-minus-circle").addClass("fa-spinner fa-spin");
+    } else {
+        btn.find('i').removeClass("fa-search-plus").addClass("fa-spinner fa-spin");
+    }
+    
+    // Déterminer le prochain niveau
+    const niveauMap = {
+        'departement': 'rayon',
+        'rayon': 'famille',
+        'famille': 'sous_famille',
+        'sous_famille': 'code_article'
+    };
+    
+    const nextNiveau = niveauMap[niveau];
+    
+    // Construire l'URL avec tous les paramètres actuels
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('niveau', nextNiveau);
+    urlParams.set('parent_filter', parentValue);
+    urlParams.set('ajax', '1');  // Indicateur pour retourner seulement le partial
+    
+    const url = "{{ url_for('commande_vente.ajax_suggestions') }}?" + urlParams.toString();
+    
+    $.get(url)
+        .done(function(data) {
+            $(targetId).html('<td colspan="100%" class="p-2">' + data + '</td>')
+                      .removeClass("d-none")
+                      .hide()
+                      .slideDown(200);
+            if (icon.length) {
+                icon.removeClass("fa-spinner fa-spin").addClass("fa-minus-circle");
+            } else {
+                btn.find('i').removeClass("fa-spinner fa-spin").addClass("fa-search-plus");
+            }
+        })
+        .fail(function(xhr, status, error) {
+            $(targetId).html('<td colspan="100%"><div class="alert alert-warning m-2">Erreur de chargement</div></td>')
+                      .removeClass("d-none");
+            if (icon.length) {
+                icon.removeClass("fa-spinner fa-spin").addClass("fa-exclamation-circle");
+            } else {
+                btn.find('i').removeClass("fa-spinner fa-spin").addClass("fa-exclamation-circle");
+            }
+        });
+}
+
+// Initialisation au chargement
+$(document).ready(function() {
+    updateTotalForNiveau('{{ niveau }}');
+});
+
+// Fonction pour mettre à jour le stock et recalculer (pour les sous-niveaux)
+function updateStockAndRecalculatePartial(itemId, niveau) {
+    const stockInput = $('#stock_' + itemId);
+    const stockValue = parseInt(stockInput.val()) || 0;
+    const venteMoyenne = parseFloat(stockInput.data('vente-moyenne')) || 0;
+    const venteMoyenneJour = venteMoyenne / 7;
+    
+    // Recalculer la couverture
+    let couverture = 0;
+    if (venteMoyenneJour > 0) {
+        couverture = Math.round(stockValue / venteMoyenneJour);
+    } else {
+        couverture = stockValue > 0 ? 999 : 0;
+    }
+    
+    // Mettre à jour l'affichage de la couverture
+    const couvertureSpan = $('#couverture_' + itemId);
+    couvertureSpan.text(couverture + 'j');
+    
+    // Mettre à jour la classe du badge
+    couvertureSpan.removeClass('badge-danger badge-warning badge-success');
+    if (couverture < 7) {
+        couvertureSpan.addClass('badge-danger');
+    } else if (couverture < 14) {
+        couvertureSpan.addClass('badge-warning');
+    } else {
+        couvertureSpan.addClass('badge-success');
+    }
+    
+    // Recalculer la quantité suggérée
+    const coverageTarget = parseInt($('#target-coverage').val()) || 21;
+    const safetyFactor = parseFloat($('#safety-factor').val()) || 1.2;
+    
+    const besoinTheorique = venteMoyenneJour * coverageTarget * safetyFactor;
+    const quantiteSuggeree = Math.max(0, Math.round(besoinTheorique - stockValue));
+    
+    // Mettre à jour l'affichage
+    $('#suggere_' + itemId).text(quantiteSuggeree.toLocaleString());
+    
+    // Mettre à jour aussi la quantité à commander
+    const qtyInput = $('#qty_' + itemId);
+    if (!qtyInput.data('manually-changed')) {
+        qtyInput.val(quantiteSuggeree);
+    }
+    
+    // Marquer le stock comme modifié
+    stockInput.addClass('stock-modified');
+}
+
+// Fonction pour sauvegarder le stock (pour les sous-niveaux)
+function saveStockPartial(itemId, niveau) {
+    const stockInput = $('#stock_' + itemId);
+    const stockValue = stockInput.val();
+    const articleCode = stockInput.data('code');
+    const articleLibelle = stockInput.data('libelle');
+    
+    $.ajax({
+        url: "{{ url_for('commande_vente.update_stock') }}",
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            article_code: articleCode,
+            article_libelle: articleLibelle,
+            stock_actuel: stockValue
+        }),
+        success: function(response) {
+            stockInput.removeClass('stock-modified').addClass('stock-saved');
+            setTimeout(() => {
+                stockInput.removeClass('stock-saved');
+            }, 2000);
+            
+            // Notification
+            if (window.showNotification) {
+                window.showNotification('Stock mis à jour avec succès', 'success');
+            }
+        },
+        error: function() {
+            if (window.showNotification) {
+                window.showNotification('Erreur lors de la mise à jour du stock', 'error');
+            }
+        }
+    });
+}
+</script>

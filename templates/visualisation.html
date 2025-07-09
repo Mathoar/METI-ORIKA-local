@@ -1,0 +1,58 @@
+<!-- templates/visualisation.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Visualisation des Tables</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <h1>Visualisation Technique</h1>
+
+    <form method="get" action="{{ url_for('visualisation.visualisation') }}">
+        <div class="form-group">
+            <label for="table">Choisir une table :</label>
+            <select class="form-control" name="table" id="table" onchange="this.form.submit()">
+                {% for t in all_tables %}
+                    <option value="{{ t }}" {% if t == selected_table %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if selected_table %}
+        <h3>Table : {{ selected_table }}</h3>
+        <p><strong>Lignes totales :</strong> {{ total_rows }}</p>
+
+        <h5>Structure :</h5>
+        <ul>
+            {% for col in column_info %}
+                <li><strong>{{ col[1] }}</strong> ({{ col[2] }})</li>
+            {% endfor %}
+        </ul>
+
+        <h5>Extrait des données :</h5>
+        {% if table_data %}
+            <table class="table table-bordered table-sm">
+                <thead class="thead-light">
+                    <tr>
+                        {% for col in column_info %}
+                            <th>{{ col[1] }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in table_data %}
+                        <tr>
+                            {% for cell in row %}
+                                <td>{{ cell }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Aucune donnée dans cette table.</p>
+        {% endif %}
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Aide à la commande - Suggestions de commande</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #fafbfc;
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .container-fluid { 
+            background-color: white; 
+            border-radius: 8px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin: 15px auto;
+            padding: 30px;
+            max-width: 95%;
+        }
+        
+        /* En-tête de page */
+        .page-header {
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+        }
+        .page-title {
+            color: #495057;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .page-subtitle {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 0;
+        }
+        
+        /* Filtres */
+        .filter-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid #e9ecef;
+        }
+        .form-control {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.2s ease;
+        }
+        .form-control:focus {
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.1rem rgba(0, 123, 255, 0.25);
+        }
+        
+        /* Statistiques */
+        .stats-cards {
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .stat-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        
+        /* Tableau de commandes */
+        .table {
+            border: none;
+            margin-bottom: 0;
+        }
+        .table th {
+            background-color: #f8f9fa;
+            color: #495057;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-top: none;
+            border-bottom: 2px solid #dee2e6;
+            padding: 15px 12px;
+        }
+        .table td {
+            padding: 12px;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f3f4;
+        }
+        
+        /* Indicateurs de tendance */
+        .trend-badge {
+            font-size: 0.75em;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .trend-up { 
+            background-color: #d4edda; 
+            color: #155724; 
+        }
+        .trend-down { 
+            background-color: #f8d7da; 
+            color: #721c24; 
+        }
+        .trend-stable { 
+            background-color: #fff3cd; 
+            color: #856404; 
+        }
+        
+        /* Boutons d'action */
+        .btn-validate {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+        .btn-validate:hover {
+            background-color: #218838;
+            border-color: #1e7e34;
+        }
+        
+        /* Alerte de stock */
+        .stock-alert {
+            font-size: 0.8em;
+            color: #dc3545;
+            margin-top: 5px;
+        }
+        
+        /* Inputs de quantité */
+        .quantity-input {
+            width: 100px;
+            text-align: center;
+        }
+        
+        /* Résumé de commande */
+        .order-summary {
+            position: sticky;
+            top: 20px;
+        }
+        .summary-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        /* Checkbox personnalisée */
+        .custom-checkbox {
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        
+        /* Navigation par niveaux */
+        .breadcrumb {
+            background-color: transparent;
+            padding: 0;
+            margin-bottom: 20px;
+        }
+        .breadcrumb-item + .breadcrumb-item::before {
+            content: "›";
+            color: #6c757d;
+        }
+        
+        /* Articles recommandés */
+        .recommended-badge {
+            background-color: #17a2b8;
+            color: white;
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <!-- En-tête -->
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="fas fa-shopping-cart text-primary mr-2"></i>
+            Suggestions de commande
+        </h1>
+        <p class="page-subtitle">
+            Basé sur l'analyse des ventes - Semaines {{ semaine_debut }} à {{ semaine_fin }}, {{ selected_annee }}
+        </p>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filter-section">
+        <form method="get" class="row align-items-end">
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Année</label>
+                <input type="number" name="annee" class="form-control" value="{{ selected_annee }}" min="2020" max="2030">
+            </div>
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Semaine début</label>
+                <input type="number" name="semaine_debut" class="form-control" value="{{ semaine_debut }}" min="1" max="52">
+            </div>
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Semaine fin</label>
+                <input type="number" name="semaine_fin" class="form-control" value="{{ semaine_fin }}" min="1" max="52">
+            </div>
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Niveau d'analyse</label>
+                <select name="niveau" class="form-control">
+                    <option value="departement" {% if niveau == 'departement' %}selected{% endif %}>Département</option>
+                    <option value="rayon" {% if niveau == 'rayon' %}selected{% endif %}>Rayon</option>
+                    <option value="famille" {% if niveau == 'famille' %}selected{% endif %}>Famille</option>
+                    <option value="sous_famille" {% if niveau == 'sous_famille' %}selected{% endif %}>Sous-famille</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Méthode de calcul</label>
+                <select name="methode" class="form-control">
+                    <option value="moyenne" {% if methode == 'moyenne' %}selected{% endif %}>Moyenne</option>
+                    <option value="tendance" {% if methode == 'tendance' %}selected{% endif %}>Tendance</option>
+                    <option value="pic" {% if methode == 'pic' %}selected{% endif %}>Pic de vente</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-calculator mr-1"></i>Calculer
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Statistiques globales -->
+    <div class="row stats-cards">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-primary">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div class="stat-value">{{ suggestions|length }}</div>
+                <div class="stat-label">Articles à commander</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-success">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-value">{{ "{:,.0f}".format(total_prevision) }}€</div>
+                <div class="stat-label">Montant prévisionnel</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-value">{{ articles_rupture }}</div>
+                <div class="stat-label">Articles en rupture</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon text-info">
+                    <i class="fas fa-percentage"></i>
+                </div>
+                <div class="stat-value">{{ couverture_stock }}j</div>
+                <div class="stat-label">Couverture stock moyenne</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation fil d'ariane -->
+    {% if parent_filters %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('commande_vente.commande_vente') }}">Tous</a></li>
+            {% for level, value in parent_filters %}
+            <li class="breadcrumb-item active">{{ value }}</li>
+            {% endfor %}
+        </ol>
+    </nav>
+    {% endif %}
+
+    <div class="row">
+        <!-- Tableau principal -->
+        <div class="col-md-9">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-muted">
+                        <i class="fas fa-list mr-2"></i>
+                        Suggestions de commande par {{ niveau }}
+                    </h6>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">
+                            <i class="fas fa-check-square mr-1"></i>Tout sélectionner
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
+                            <i class="fas fa-square mr-1"></i>Tout désélectionner
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" class="custom-checkbox" id="checkAll">
+                                    </th>
+                                    <th>{{ niveau|title }}</th>
+                                    <th class="text-center">Vente moy./sem</th>
+                                    <th class="text-center">Stock actuel</th>
+                                    <th class="text-center">Couverture (j)</th>
+                                    <th class="text-center">Qté suggérée</th>
+                                    <th class="text-center">Qté à commander</th>
+                                    <th class="text-center">Tendance</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in suggestions %}
+                                <tr class="{% if item.rupture %}table-danger{% elif item.stock_faible %}table-warning{% endif %}">
+                                    <td>
+                                        <input type="checkbox" class="custom-checkbox item-check" 
+                                               data-id="{{ item.id }}" 
+                                               {% if item.selected %}checked{% endif %}>
+                                    </td>
+                                    <td>
+                                        <strong>{{ item.libelle }}</strong>
+                                        {% if item.recommande %}
+                                            <span class="recommended-badge">Recommandé</span>
+                                        {% endif %}
+                                        {% if item.rupture %}
+                                            <div class="stock-alert">
+                                                <i class="fas fa-exclamation-circle"></i> Rupture de stock
+                                            </div>
+                                        {% elif item.stock_faible %}
+                                            <div class="text-warning" style="font-size: 0.8em;">
+                                                <i class="fas fa-exclamation-triangle"></i> Stock faible
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">{{ "{:,.0f}".format(item.vente_moyenne) }}</td>
+                                    <td class="text-center">
+                                        <div class="input-group input-group-sm" style="width: 120px; margin: 0 auto;">
+                                            <input type="number" 
+                                                   class="form-control stock-input text-center" 
+                                                   id="stock_{{ item.id }}"
+                                                   data-id="{{ item.id }}"
+                                                   value="{{ item.stock_actuel }}"
+                                                   min="0"
+                                                   onchange="updateStockAndRecalculate('{{ item.id }}')">
+                                            <div class="input-group-append">
+                                                <button class="btn btn-outline-secondary btn-sm" 
+                                                        type="button" 
+                                                        onclick="saveStock('{{ item.id }}')"
+                                                        title="Sauvegarder le stock">
+                                                    <i class="fas fa-save"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge badge-{% if item.couverture < 7 %}danger{% elif item.couverture < 14 %}warning{% else %}success{% endif %}"
+                                              id="couverture_{{ item.id }}">
+                                            {{ item.couverture }}j
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <strong id="suggere_{{ item.id }}">{{ "{:,.0f}".format(item.quantite_suggeree) }}</strong>
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" 
+                                               class="form-control quantity-input" 
+                                               id="qty_{{ item.id }}"
+                                               value="{{ item.quantite_suggeree }}"
+                                               min="0"
+                                               onchange="updateTotal()">
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="trend-badge {% if item.tendance > 5 %}trend-up{% elif item.tendance < -5 %}trend-down{% else %}trend-stable{% endif %}">
+                                            {% if item.tendance > 0 %}+{% endif %}{{ item.tendance }}%
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if niveau != 'code_article' %}
+                                        <a href="{{ url_for('commande_vente.commande_vente', niveau=next_niveau, parent_filter=item.libelle, **request.args) }}" 
+                                           class="btn btn-sm btn-outline-primary" 
+                                           title="Voir le détail">
+                                            <i class="fas fa-search-plus"></i>
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Résumé de commande -->
+        <div class="col-md-3">
+            <div class="order-summary">
+                <div class="summary-card">
+                    <h5 class="mb-3">
+                        <i class="fas fa-clipboard-list mr-2"></i>
+                        Résumé de commande
+                    </h5>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Articles sélectionnés:</span>
+                            <strong id="selected-count">0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Quantité totale:</span>
+                            <strong id="total-quantity">0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Montant estimé:</span>
+                            <strong id="total-amount">0€</strong>
+                        </div>
+                    </div>
+                    <hr>
+                    <button class="btn btn-validate btn-block" onclick="validateOrder()">
+                        <i class="fas fa-check mr-2"></i>
+                        Valider la commande
+                    </button>
+                    <button class="btn btn-save-all-stocks btn-block mt-2" onclick="saveAllModifiedStocks()">
+                        <i class="fas fa-save mr-2"></i>
+                        Sauvegarder tous les stocks
+                    </button>
+                    <button class="btn btn-outline-secondary btn-block mt-2" onclick="exportOrder()">
+                        <i class="fas fa-file-export mr-2"></i>
+                        Exporter
+                    </button>
+                </div>
+
+                <!-- Paramètres de commande -->
+                <div class="summary-card mt-3">
+                    <h6 class="mb-3">
+                        <i class="fas fa-cog mr-2"></i>
+                        Paramètres
+                    </h6>
+                    <div class="form-group">
+                        <label class="small">Couverture cible (jours)</label>
+                        <input type="number" class="form-control form-control-sm" 
+                               id="target-coverage" value="21" min="7" max="90"
+                               onchange="recalculateSuggestions()">
+                    </div>
+                    <div class="form-group">
+                        <label class="small">Coefficient de sécurité</label>
+                        <input type="number" class="form-control form-control-sm" 
+                               id="safety-factor" value="1.2" min="1" max="2" step="0.1"
+                               onchange="recalculateSuggestions()">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Sélection globale
+$('#checkAll').on('change', function() {
+    $('.item-check').prop('checked', $(this).prop('checked'));
+    updateTotal();
+});
+
+$('.item-check').on('change', function() {
+    updateTotal();
+});
+
+function selectAll() {
+    $('.item-check').prop('checked', true);
+    $('#checkAll').prop('checked', true);
+    updateTotal();
+}
+
+function deselectAll() {
+    $('.item-check').prop('checked', false);
+    $('#checkAll').prop('checked', false);
+    updateTotal();
+}
+
+// Mise à jour des totaux
+function updateTotal() {
+    let count = 0;
+    let quantity = 0;
+    let amount = 0;
+
+    $('.item-check:checked').each(function() {
+        count++;
+        const id = $(this).data('id');
+        const qty = parseInt($('#qty_' + id).val()) || 0;
+        quantity += qty;
+        // Calcul du montant estimé (à adapter selon vos données)
+        amount += qty * 10; // Prix moyen temporaire
+    });
+
+    $('#selected-count').text(count);
+    $('#total-quantity').text(quantity.toLocaleString());
+    $('#total-amount').text(amount.toLocaleString() + '€');
+}
+
+// Validation de la commande
+function validateOrder() {
+    const selectedItems = [];
+    $('.item-check:checked').each(function() {
+        const id = $(this).data('id');
+        selectedItems.push({
+            id: id,
+            quantity: $('#qty_' + id).val()
+        });
+    });
+
+    if (selectedItems.length === 0) {
+        alert('Veuillez sélectionner au moins un article');
+        return;
+    }
+
+    // Envoi AJAX pour validation
+    $.ajax({
+        url: "{{ url_for('commande_vente.valider_commande') }}",
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            items: selectedItems,
+            parameters: {
+                coverage: $('#target-coverage').val(),
+                safety: $('#safety-factor').val()
+            }
+        }),
+        success: function(response) {
+            alert('Commande validée avec succès!');
+            window.location.reload();
+        },
+        error: function() {
+            alert('Erreur lors de la validation');
+        }
+    });
+}
+
+// Export de la commande
+function exportOrder() {
+    const selectedItems = [];
+    $('.item-check:checked').each(function() {
+        const id = $(this).data('id');
+        selectedItems.push(id);
+    });
+
+    if (selectedItems.length === 0) {
+        alert('Veuillez sélectionner au moins un article');
+        return;
+    }
+
+    window.location.href = "{{ url_for('commande_vente.export_commande') }}?items=" + selectedItems.join(',');
+}
+
+// Recalcul des suggestions
+function recalculateSuggestions() {
+    const coverage = $('#target-coverage').val();
+    const safety = $('#safety-factor').val();
+    
+    // Recharger la page avec les nouveaux paramètres
+    const url = new URL(window.location);
+    url.searchParams.set('coverage', coverage);
+    url.searchParams.set('safety', safety);
+    window.location = url;
+}
+
+// Initialisation
+$(document).ready(function() {
+    updateTotal();
+});
+
+// Fonction pour mettre à jour le stock et recalculer
+function updateStockAndRecalculate(itemId) {
+    const stockValue = parseInt($('#stock_' + itemId).val()) || 0;
+    const venteMoyenne = {{ suggestions|tojson }}.find(item => item.id === itemId)?.vente_moyenne || 0;
+    const venteMoyenneJour = venteMoyenne / 7;
+    
+    // Recalculer la couverture
+    let couverture = 0;
+    if (venteMoyenneJour > 0) {
+        couverture = Math.round(stockValue / venteMoyenneJour);
+    } else {
+        couverture = stockValue > 0 ? 999 : 0;
+    }
+    
+    // Mettre à jour l'affichage de la couverture
+    const couvertureSpan = $('#couverture_' + itemId);
+    couvertureSpan.text(couverture + 'j');
+    
+    // Mettre à jour la classe du badge
+    couvertureSpan.removeClass('badge-danger badge-warning badge-success');
+    if (couverture < 7) {
+        couvertureSpan.addClass('badge-danger');
+    } else if (couverture < 14) {
+        couvertureSpan.addClass('badge-warning');
+    } else {
+        couvertureSpan.addClass('badge-success');
+    }
+    
+    // Recalculer la quantité suggérée
+    const coverageTarget = parseInt($('#target-coverage').val()) || 21;
+    const safetyFactor = parseFloat($('#safety-factor').val()) || 1.2;
+    
+    const besoinTheorique = venteMoyenneJour * coverageTarget * safetyFactor;
+    const quantiteSuggeree = Math.max(0, Math.round(besoinTheorique - stockValue));
+    
+    // Mettre à jour l'affichage
+    $('#suggere_' + itemId).text(quantiteSuggeree.toLocaleString());
+    
+    // Mettre à jour aussi la quantité à commander si elle n'a pas été modifiée manuellement
+    const qtyInput = $('#qty_' + itemId);
+    if (!qtyInput.data('manually-changed')) {
+        qtyInput.val(quantiteSuggeree);
+    }
+    
+    // Marquer le stock comme modifié (changer la couleur de fond)
+    $('#stock_' + itemId).addClass('stock-modified');
+}
+
+// Fonction pour sauvegarder le stock
+function saveStock(itemId) {
+    const stockValue = $('#stock_' + itemId).val();
+    const articleCode = {{ suggestions|tojson }}.find(item => item.id === itemId)?.code || '';
+    const articleLibelle = {{ suggestions|tojson }}.find(item => item.id === itemId)?.libelle || '';
+    
+    $.ajax({
+        url: "{{ url_for('commande_vente.update_stock') }}",
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            article_code: articleCode,
+            article_libelle: articleLibelle,
+            stock_actuel: stockValue
+        }),
+        success: function(response) {
+            // Feedback visuel
+            $('#stock_' + itemId).removeClass('stock-modified').addClass('stock-saved');
+            setTimeout(() => {
+                $('#stock_' + itemId).removeClass('stock-saved');
+            }, 2000);
+            
+            // Notification
+            showNotification('Stock mis à jour avec succès', 'success');
+        },
+        error: function() {
+            showNotification('Erreur lors de la mise à jour du stock', 'error');
+        }
+    });
+}
+
+// Fonction pour sauvegarder tous les stocks modifiés
+function saveAllModifiedStocks() {
+    const modifiedStocks = [];
+    
+    $('.stock-modified').each(function() {
+        const itemId = $(this).data('id');
+        const stockValue = $(this).val();
+        const item = {{ suggestions|tojson }}.find(item => item.id === itemId);
+        
+        if (item) {
+            modifiedStocks.push({
+                article_code: item.code,
+                article_libelle: item.libelle,
+                stock_actuel: stockValue
+            });
+        }
+    });
+    
+    if (modifiedStocks.length === 0) {
+        showNotification('Aucun stock à mettre à jour', 'info');
+        return;
+    }
+    
+    $.ajax({
+        url: "{{ url_for('commande_vente.update_stocks_batch') }}",
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ stocks: modifiedStocks }),
+        success: function(response) {
+            $('.stock-modified').removeClass('stock-modified').addClass('stock-saved');
+            setTimeout(() => {
+                $('.stock-saved').removeClass('stock-saved');
+            }, 2000);
+            
+            showNotification(`${modifiedStocks.length} stocks mis à jour`, 'success');
+        },
+        error: function() {
+            showNotification('Erreur lors de la mise à jour des stocks', 'error');
+        }
+    });
+}
+
+// Marquer les quantités modifiées manuellement
+$(document).on('change', '.quantity-input', function() {
+    $(this).data('manually-changed', true);
+});
+
+// Fonction pour afficher les notifications
+function showNotification(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : 
+                      type === 'error' ? 'alert-danger' : 'alert-info';
+    
+    const notification = $(`
+        <div class="alert ${alertClass} alert-dismissible fade show notification-toast" role="alert">
+            ${message}
+            <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+            </button>
+        </div>
+    `);
+    
+    $('body').append(notification);
+    
+    setTimeout(() => {
+        notification.alert('close');
+    }, 3000);
+}
+</script>
+</body>
+</html>

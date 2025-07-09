@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Stock</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+</head>
+<body>
+<div class="container mt-4">
+    <h1>Stock</h1>
+
+    <!-- Navigation -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('fournisseurs.fournisseurs') }}">Fournisseurs</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link active" href="{{ url_for('upload_stock.stock') }}">Stock</a>
+        </li>
+    </ul>
+
+    <!-- Upload Stock File -->
+    <form method="POST" action="{{ url_for('upload_stock.upload_stock') }}" enctype="multipart/form-data" class="mb-4">
+        <div class="form-group">
+            <label for="stock_file">Fichier Stock (.xls, .xlsx)</label>
+            <input type="file" name="stock_file" id="stock_file" accept=".xls,.xlsx" class="form-control-file" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Importer</button>
+    </form>
+
+    {% if error_message %}
+        <div class="alert alert-danger">{{ error_message }}</div>
+    {% endif %}
+
+    <!-- Filtres -->
+    <form method="GET" action="{{ url_for('upload_stock.stock') }}" class="mb-4">
+        <div class="form-row">
+            <div class="col-md-3 mb-2">
+                <input type="text" name="article" class="form-control" placeholder="Rechercher un article..."
+                       value="{{ request.args.get('article','') }}">
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="text" name="code_article" class="form-control" placeholder="Code article..."
+                       value="{{ request.args.get('code_article','') }}">
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="departement" class="form-control">
+                    <option value="">Département</option>
+                    {% for val in departements %}
+                        <option value="{{ val }}" {% if request.args.get('departement')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="rayon" class="form-control">
+                    <option value="">Rayon</option>
+                    {% for val in rayons %}
+                        <option value="{{ val }}" {% if request.args.get('rayon')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="famille" class="form-control">
+                    <option value="">Famille</option>
+                    {% for val in familles %}
+                        <option value="{{ val }}" {% if request.args.get('famille')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="date" name="derniere_entree" class="form-control"
+                       value="{{ request.args.get('derniere_entree','') }}">
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="type" class="form-control select2" multiple>
+                    {% for val in types %}
+                        <option value="{{ val }}" {% if val in request.args.getlist('type') %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="marque" class="form-control select2" multiple>
+                    {% for val in marques %}
+                        <option value="{{ val }}" {% if val in request.args.getlist('marque') %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="magasin" class="form-control">
+                    <option value="">Magasin</option>
+                    {% for val in magasins %}
+                        <option value="{{ val }}" {% if request.args.get('magasin')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-12 mb-3">
+                <label for="colonnes">Colonnes à afficher :</label>
+                <select name="colonnes" id="colonnes" multiple class="form-control select2">
+                    {% for col in colonnes_disponibles %}
+                        <option value="{{ col }}" {% if col in selected_columns %}selected{% endif %}>
+                            {{ col.replace('_',' ').capitalize() }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="form-text text-muted">Utilisez Ctrl/Cmd + clic pour sélectionner plusieurs colonnes.</small>
+            </div>
+            <div class="col-md-3 mb-2">
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">Filtrer</button>
+                    <a href="{{ url_for('upload_stock.stock') }}" class="btn btn-secondary">Réinitialiser</a>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if stock_rows %}
+        <table class="table table-bordered table-sm">
+            <thead class="thead-light">
+                <tr>
+                    {% for col in selected_columns %}
+                        <th>{{ col.replace('_',' ').capitalize() }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in stock_rows %}
+                    <tr>
+                        {% for val in row %}
+                            <td>{{ val }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination moderne -->
+        <nav aria-label="Pagination">
+            <form method="GET" action="{{ url_for('upload_stock.stock') }}" class="form-inline justify-content-center mt-3">
+                {% for key, value in request.args.items() %}
+                    {% if key != 'page' %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endif %}
+                {% endfor %}
+                <div class="btn-group mr-2">
+                    {% if page > 1 %}
+                        <button type="submit" name="page" value="{{ page - 1 }}" class="btn btn-outline-primary">←</button>
+                    {% else %}
+                        <button type="button" class="btn btn-outline-secondary" disabled>←</button>
+                    {% endif %}
+                </div>
+                <span class="mx-2 align-self-center">Page</span>
+                <input type="number" name="page" min="1" max="{{ total_pages }}" value="{{ page }}" class="form-control form-control-sm mx-1" style="width: 70px;">
+                <span class="mx-2 align-self-center">sur {{ total_pages }}</span>
+                <div class="btn-group ml-2">
+                    {% if page < total_pages %}
+                        <button type="submit" name="page" value="{{ page + 1 }}" class="btn btn-outline-primary">→</button>
+                    {% else %}
+                        <button type="button" class="btn btn-outline-secondary" disabled>→</button>
+                    {% endif %}
+                </div>
+            </form>
+        </nav>
+    {% else %}
+        <div class="alert alert-warning">Aucune donnée trouvée pour ces filtres.</div>
+    {% endif %}
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('.select2').select2({
+            width: '100%',
+            placeholder: "Sélectionnez"
+        });
+    });
+</script>
+</body>
+</html>

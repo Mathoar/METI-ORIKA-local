@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fournisseurs Actifs</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .article-row {
+            cursor: pointer;
+        }
+        .supplier-details {
+            display: none;
+            padding-left: 20px;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Fournisseurs Actifs</h1>
+        <button onclick="createFRSDB()" class="btn btn-primary">Créer et Afficher la Base de Données</button>
+        <button onclick="fetchArticleStats()" class="btn btn-secondary">Afficher les Statistiques des Articles</button>
+        <button onclick="fetchArticlesWithMultipleSuppliers()" class="btn btn-info">Articles avec Plusieurs Fournisseurs</button>
+        <div id="tableContainer"></div>
+        <div id="statsContainer"></div>
+        <div id="articlesWithMultipleSuppliersContainer"></div>
+    </div>
+
+<script>
+let tableData = [];
+
+async function fetchArticlesWithMultipleSuppliers() {
+    try {
+        const response = await fetch('/create_db/articles_with_multiple_suppliers', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        if (data.success) {
+            displayArticlesWithMultipleSuppliers(data.data);
+        } else {
+            alert(data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Une erreur est survenue lors de la récupération des articles avec plusieurs fournisseurs.');
+    }
+}
+
+function displayArticlesWithMultipleSuppliers(articles) {
+    let articlesHTML = `
+        <h2 class="mt-4">Articles avec Plusieurs Fournisseurs</h2>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Article</th>
+                    <th>Nombre de Fournisseurs</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+    articles.forEach(article => {
+        articlesHTML += `
+            <tr onclick="toggleSuppliers(${article.article})" class="article-row">
+                <td>${article.article}</td>
+                <td>${article.occurrence_count}</td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <div id="suppliers-${article.article}" class="supplier-details">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="primarySupplier-${article.article}" id="primarySupplier-${article.article}-1">
+                            <label class="form-check-label" for="primarySupplier-${article.article}-1">
+                                Fournisseur 1
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="primarySupplier-${article.article}" id="primarySupplier-${article.article}-2">
+                            <label class="form-check-label" for="primarySupplier-${article.article}-2">
+                                Fournisseur 2
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="secondarySupplier-${article.article}" id="secondarySupplier-${article.article}-1">
+                            <label class="form-check-label" for="secondarySupplier-${article.article}-1">
+                                Fournisseur secondaire 1
+                            </label>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+    });
+
+    articlesHTML += `</tbody></table>`;
+    document.getElementById('articlesWithMultipleSuppliersContainer').innerHTML = articlesHTML;
+}
+
+function toggleSuppliers(articleId) {
+    const suppliersDiv = document.getElementById(`suppliers-${articleId}`);
+    if (suppliersDiv.style.display === 'none' || suppliersDiv.style.display === '') {
+        suppliersDiv.style.display = 'block';
+    } else {
+        suppliersDiv.style.display = 'none';
+    }
+}
+</script>
+</body>
+</html>

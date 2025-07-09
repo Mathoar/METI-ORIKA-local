@@ -1,0 +1,544 @@
+import sqlite3
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import io
+
+DB_PATH = "/Users/mhoar/Desktop/python_vscode/price_comparison.db"
+
+def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode, coverage=21, safety=1.2, filtres=None):
+    """
+    Génère des suggestions de commande basées sur l'analyse des ventes
+    
+    Args:
+        annee: Année d'analyse
+        semaine_debut: Semaine de début
+        semaine_fin: Semaine de fin
+        niveau: Niveau d'agrégation (departement, rayon, famille, sous_famille, code_article)
+        methode: Méthode de calcul (moyenne, tendance, pic)
+        coverage: Couverture cible en jours
+        safety: Coefficient de sécurité
+        filtres: Filtres additionnels
+    
+    Returns:
+        Liste des suggestions avec quantités recommandées
+    """
+    conn = sqlite3.connect(DB_PATH)
+    
+    try:
+        # Configuration des champs selon le niveau
+        niveau_config = {
+            'departement': ('departement', 'libelle_departement'),
+            'rayon': ('rayon', 'libelle_rayon'),
+            'famille': ('famille', 'libelle_famille'),
+            'sous_famille': ('libelle_sous_famille', 'libelle_sous_famille'),
+            'code_article': ('code_article', 'libelle_article')
+        }
+        
+        group_by, label_field = niveau_config.get(niveau, ('departement', 'libelle_departement'))
+        
+        # Requête pour les ventes
+        query_ventes = f"""
+            SELECT 
+                {group_by},
+                {label_field},
+                semaine,
+                SUM(ca) as ca,
+                SUM(qte) as qte
+            FROM vente_meti
+            WHERE annee = ?
+              AND semaine BETWEEN ? AND ?
+        """
+        
+        params = [annee, semaine_debut, semaine_fin]
+        
+        # Ajouter les filtres
+        if filtres:
+            for k, v in filtres.items():
+                query_ventes += f" AND {k} = ?"
+                params.append(v)
+        
+        query_ventes += f" GROUP BY {group_by}, {label_field}, semaine"
+        
+        # Exécuter la requête
+        df_ventes = pd.read_sql_query(query_ventes, conn, params=params)
+        
+        # Requête pour le stock actuel (si niveau article)
+        if niveau == 'code_article':
+            query_stock = """
+                SELECT 
+                    code_article,
+                    SUM(stock_actuel) as stock_actuel,
+                    AVG(prix_achat) as prix_moyen
+                FROM stock_actuel
+                GROUP BY code_article
+            """
+            df_stock = pd.read_sql_query(query_stock, conn)
+        else:
+            # Pour les autres niveaux, on simule un stock agrégé
+            df_stock = pd.DataFrame()
+        
+        # Calculer les suggestions
+        suggestions = []
+        
+        # Grouper par article/niveau
+        grouped = df_ventes.groupby([group_by, label_field])
+        
+        for (code, libelle), group_data in grouped:
+            # Calculer les métriques de vente
+            ventes_semaine = group_data.groupby('semaine')['qte'].sum()
+            nb_semaines = len(ventes_semaine)
+            
+            if nb_semaines == 0:
+                continue
+            
+            # Calcul selon la méthode
+            if methode == 'moyenne':
+                vente_moyenne_hebdo = ventes_semaine.mean()
+            elif methode == 'tendance':
+                # Calcul de la tendance linéaire
+                if nb_semaines > 1:
+                    x = np.arange(nb_semaines)
+                    y = ventes_semaine.values
+                    z = np.polyfit(x, y, 1)
+                    # Projection pour la prochaine semaine
+                    vente_moyenne_hebdo = z[0] * nb_semaines + z[1]
+                    vente_moyenne_hebdo = max(0, vente_moyenne_hebdo)
+                else:
+                    vente_moyenne_hebdo = ventes_semaine.mean()
+            elif methode == 'pic':
+                # Utiliser le pic de vente
+                vente_moyenne_hebdo = ventes_semaine.max()
+            else:
+                vente_moyenne_hebdo = ventes_semaine.mean()
+            
+            # Conversion en vente journalière
+            vente_moyenne_jour = vente_moyenne_hebdo / 7
+            
+            # Stock actuel (si disponible)
+            stock_actuel = 0
+            prix_moyen = 0
+            if niveau == 'code_article' and not df_stock.empty:
+                stock_row = df_stock[df_stock['code_article'] == code]
+                if not stock_row.empty:
+                    stock_actuel = stock_row['stock_actuel'].values[0] or 0
+                    prix_moyen = stock_row['prix_moyen'].values[0] or 0
+            
+            # Calcul de la couverture actuelle
+            if vente_moyenne_jour > 0:
+                couverture_actuelle = stock_actuel / vente_moyenne_jour
+            else:
+                couverture_actuelle = 999  # Stock infini si pas de vente
+            
+            # Calcul de la quantité suggérée
+            besoin_theorique = vente_moyenne_jour * coverage * safety
+            quantite_suggeree = max(0, besoin_theorique - stock_actuel)
+            
+            # Calcul de la tendance
+            if nb_semaines >= 2:
+                debut = ventes_semaine.iloc[:nb_semaines//2].mean()
+                fin = ventes_semaine.iloc[nb_semaines//2:].mean()
+                if debut > 0:
+                    tendance = ((fin - debut) / debut) * 100
+                else:
+                    tendance = 0
+            else:
+                tendance = 0
+            
+            # Déterminer les alertes
+            rupture = stock_actuel == 0 and vente_moyenne_jour > 0
+            stock_faible = couverture_actuelle < 7 and not rupture
+            recommande = (tendance > 10) or rupture or stock_faible
+            
+            # CA moyen
+            ca_moyen = group_data['ca'].sum() / nb_semaines
+            
+            suggestions.append({
+                'id': str(abs(hash(f"{code}_{libelle}"))),
+                'code': code,
+                'libelle': libelle,
+                'vente_moyenne': round(vente_moyenne_hebdo, 0),
+                'stock_actuel': round(stock_actuel, 0),
+                'couverture': round(couverture_actuelle, 0),
+                'quantite_suggeree': round(quantite_suggeree, 0),
+                'tendance': round(tendance, 1),
+                'ca_moyen': ca_moyen,
+                'prix_moyen': prix_moyen,
+                'rupture': rupture,
+                'stock_faible': stock_faible,
+                'recommande': recommande,
+                'selected': recommande  # Pré-sélectionner les articles recommandés
+            })
+        
+        # Trier par quantité suggérée décroissante
+        suggestions.sort(key=lambda x: x['quantite_suggeree'], reverse=True)
+        
+        return suggestions
+        
+    except Exception as e:
+        print(f"Erreur dans get_suggestions_commande: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+    finally:
+        conn.close()
+
+def calculer_statistiques_globales(suggestions):
+    """
+    Calcule les statistiques globales pour le tableau de bord
+    """
+    if not suggestions:
+        return {
+            'total_prevision': 0,
+            'articles_rupture': 0,
+            'couverture_moyenne': 0
+        }
+    
+    # Total prévisionnel (basé sur le CA moyen)
+    total_prevision = sum(s['ca_moyen'] for s in suggestions if s['selected'])
+    
+    # Articles en rupture
+    articles_rupture = sum(1 for s in suggestions if s['rupture'])
+    
+    # Couverture moyenne (exclure les valeurs extrêmes)
+    couvertures = [s['couverture'] for s in suggestions if s['couverture'] < 100]
+    if couvertures:
+        couverture_moyenne = round(sum(couvertures) / len(couvertures), 0)
+    else:
+        couverture_moyenne = 0
+    
+    return {
+        'total_prevision': total_prevision,
+        'articles_rupture': articles_rupture,
+        'couverture_moyenne': couverture_moyenne
+    }
+
+def valider_commande_service(items, parameters):
+    """
+    Valide et enregistre une commande dans la base de données
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Créer la table des commandes si elle n'existe pas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS commandes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                statut TEXT DEFAULT 'En attente',
+                total_articles INTEGER,
+                total_quantite INTEGER,
+                parametres TEXT
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS commandes_details (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                commande_id INTEGER,
+                article_code TEXT,
+                article_libelle TEXT,
+                quantite INTEGER,
+                FOREIGN KEY (commande_id) REFERENCES commandes(id)
+            )
+        """)
+        
+        # Enregistrer la commande
+        cursor.execute("""
+            INSERT INTO commandes (total_articles, total_quantite, parametres)
+            VALUES (?, ?, ?)
+        """, (
+            len(items),
+            sum(int(item['quantity']) for item in items),
+            str(parameters)
+        ))
+        
+        commande_id = cursor.lastrowid
+        
+        # Enregistrer les détails
+        for item in items:
+            cursor.execute("""
+                INSERT INTO commandes_details (commande_id, article_code, quantite)
+                VALUES (?, ?, ?)
+            """, (commande_id, item['id'], item['quantity']))
+        
+        conn.commit()
+        
+        return {'commande_id': commande_id}
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def exporter_commande_excel(item_ids, annee, semaine_debut, semaine_fin, niveau):
+    """
+    Exporte une commande au format Excel en utilisant pandas
+    """
+    conn = sqlite3.connect(DB_PATH)
+    
+    try:
+        # Créer un DataFrame avec les données de commande
+        data = []
+        
+        for idx, item_id in enumerate(item_ids):
+            # Simuler les données (à adapter selon votre structure réelle)
+            data.append({
+                'Code': f'ART{idx+1}',
+                'Libellé': f'Article {idx+1}',
+                'Quantité suggérée': 100,
+                'Stock actuel': 50,
+                'Couverture (j)': 7,
+                'Tendance': '+5%',
+                'Quantité à commander': 100
+            })
+        
+        # Créer le DataFrame
+        df = pd.DataFrame(data)
+        
+        # Créer un buffer en mémoire
+        output = io.BytesIO()
+        
+        # Écrire le DataFrame dans Excel avec mise en forme
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Commande', index=False)
+            
+            # Obtenir la feuille de calcul
+            worksheet = writer.sheets['Commande']
+            
+            # Appliquer une mise en forme basique
+            # Ajuster la largeur des colonnes
+            worksheet.column_dimensions['A'].width = 15
+            worksheet.column_dimensions['B'].width = 40
+            worksheet.column_dimensions['C'].width = 20
+            worksheet.column_dimensions['D'].width = 15
+            worksheet.column_dimensions['E'].width = 15
+            worksheet.column_dimensions['F'].width = 12
+            worksheet.column_dimensions['G'].width = 20
+            
+            # Mettre en forme l'en-tête
+            for cell in worksheet[1]:
+                cell.font = cell.font.copy(bold=True)
+                cell.fill = cell.fill.copy(fgColor="4472C4")
+        
+        # Réinitialiser la position du buffer
+        output.seek(0)
+        
+        return output.getvalue()
+        
+    except Exception as e:
+        print(f"Erreur export Excel: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def get_historique_commandes(limit=50):
+    """
+    Récupère l'historique des commandes
+    """
+    conn = sqlite3.connect(DB_PATH)
+    
+    try:
+        query = """
+            SELECT 
+                id,
+                date_creation,
+                statut,
+                total_articles,
+                total_quantite,
+                parametres
+            FROM commandes
+            ORDER BY date_creation DESC
+            LIMIT ?
+        """
+        
+        df = pd.read_sql_query(query, conn, params=[limit])
+        
+        # Convertir en liste de dictionnaires
+        commandes = df.to_dict('records')
+        
+        # Formater les dates
+        for commande in commandes:
+            if commande['date_creation']:
+                commande['date_creation'] = pd.to_datetime(commande['date_creation']).strftime('%d/%m/%Y %H:%M')
+        
+        return commandes
+        
+    except Exception as e:
+        print(f"Erreur get_historique_commandes: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_details_commande(commande_id):
+    """
+    Récupère les détails d'une commande spécifique
+    """
+    conn = sqlite3.connect(DB_PATH)
+    
+    try:
+        # Récupérer les infos de la commande
+        query_commande = """
+            SELECT 
+                id,
+                date_creation,
+                statut,
+                total_articles,
+                total_quantite,
+                parametres
+            FROM commandes
+            WHERE id = ?
+        """
+        
+        commande = pd.read_sql_query(query_commande, conn, params=[commande_id]).to_dict('records')
+        
+        if not commande:
+            return None
+            
+        commande = commande[0]
+        
+        # Récupérer les détails
+        query_details = """
+            SELECT 
+                article_code,
+                article_libelle,
+                quantite
+            FROM commandes_details
+            WHERE commande_id = ?
+            ORDER BY quantite DESC
+        """
+        
+        details = pd.read_sql_query(query_details, conn, params=[commande_id]).to_dict('records')
+        
+        commande['details'] = details
+        
+        # Formater la date
+        if commande['date_creation']:
+            commande['date_creation'] = pd.to_datetime(commande['date_creation']).strftime('%d/%m/%Y %H:%M')
+        
+        return commande
+        
+    except Exception as e:
+        print(f"Erreur get_details_commande: {e}")
+        return None
+    finally:
+        conn.close()
+
+def update_stock_article(article_code, article_libelle, stock_actuel):
+    """
+    Met à jour le stock d'un article
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Vérifier si l'article existe
+        cursor.execute("""
+            SELECT stock_actuel FROM stock_actuel WHERE code_article = ?
+        """, (article_code,))
+        
+        old_stock = cursor.fetchone()
+        
+        if old_stock:
+            # Mettre à jour le stock existant
+            cursor.execute("""
+                UPDATE stock_actuel 
+                SET stock_actuel = ?, date_maj = CURRENT_TIMESTAMP
+                WHERE code_article = ?
+            """, (stock_actuel, article_code))
+            
+            # Enregistrer le mouvement
+            cursor.execute("""
+                INSERT INTO mouvements_stock 
+                (type_mouvement, code_article, quantite, stock_avant, stock_apres, commentaire)
+                VALUES ('AJUSTEMENT', ?, ?, ?, ?, 'Mise à jour manuelle depuis commande')
+            """, (article_code, stock_actuel - old_stock[0], old_stock[0], stock_actuel))
+        else:
+            # Créer un nouvel enregistrement
+            cursor.execute("""
+                INSERT INTO stock_actuel 
+                (code_article, libelle_article, stock_actuel, date_maj)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            """, (article_code, article_libelle, stock_actuel))
+            
+            # Enregistrer le mouvement
+            cursor.execute("""
+                INSERT INTO mouvements_stock 
+                (type_mouvement, code_article, quantite, stock_avant, stock_apres, commentaire)
+                VALUES ('AJUSTEMENT', ?, ?, 0, ?, 'Création depuis commande')
+            """, (article_code, stock_actuel, stock_actuel))
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Erreur update_stock_article: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def update_stocks_batch(stocks):
+    """
+    Met à jour plusieurs stocks en une seule transaction
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    updated = []
+    
+    try:
+        for stock_data in stocks:
+            article_code = stock_data.get('article_code')
+            article_libelle = stock_data.get('article_libelle')
+            stock_actuel = float(stock_data.get('stock_actuel', 0))
+            
+            # Vérifier le stock actuel
+            cursor.execute("""
+                SELECT stock_actuel FROM stock_actuel WHERE code_article = ?
+            """, (article_code,))
+            
+            old_stock = cursor.fetchone()
+            
+            if old_stock:
+                # Mettre à jour
+                cursor.execute("""
+                    UPDATE stock_actuel 
+                    SET stock_actuel = ?, date_maj = CURRENT_TIMESTAMP
+                    WHERE code_article = ?
+                """, (stock_actuel, article_code))
+                
+                # Mouvement
+                cursor.execute("""
+                    INSERT INTO mouvements_stock 
+                    (type_mouvement, code_article, quantite, stock_avant, stock_apres, commentaire)
+                    VALUES ('AJUSTEMENT', ?, ?, ?, ?, 'Mise à jour batch depuis commande')
+                """, (article_code, stock_actuel - old_stock[0], old_stock[0], stock_actuel))
+            else:
+                # Créer
+                cursor.execute("""
+                    INSERT INTO stock_actuel 
+                    (code_article, libelle_article, stock_actuel, date_maj)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                """, (article_code, article_libelle, stock_actuel))
+                
+                # Mouvement
+                cursor.execute("""
+                    INSERT INTO mouvements_stock 
+                    (type_mouvement, code_article, quantite, stock_avant, stock_apres, commentaire)
+                    VALUES ('AJUSTEMENT', ?, ?, 0, ?, 'Création batch depuis commande')
+                """, (article_code, stock_actuel, stock_actuel))
+            
+            updated.append(article_code)
+        
+        conn.commit()
+        return updated
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Erreur update_stocks_batch: {e}")
+        raise e
+    finally:
+        conn.close()

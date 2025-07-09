@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fournisseurs</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+</head>
+<body>
+<div class="container mt-4">
+    <h1>Fournisseurs</h1>
+
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if request.path == url_for('dashboard.dashboard') %}active{% endif %}"
+               href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith(url_for('fournisseurs.fournisseurs')) %}active{% endif %}"
+               href="{{ url_for('fournisseurs.fournisseurs') }}">Fournisseurs</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith(url_for('upload_stock.stock')) %}active{% endif %}"
+               href="{{ url_for('upload_stock.stock') }}">Stock</a>
+        </li>
+    </ul>
+
+    <!-- Bouton Rafrâchir -->
+    <form action="{{ url_for('fournisseurs.rafraichir_fournisseurs') }}" method="post" class="mb-3">
+        <button type="submit" class="btn btn-primary"
+                onclick="return confirm('Êtes-vous sûr de vouloir rafraîchir les données fournisseurs ?');">
+            🔄 Rafraîchir les fournisseurs
+        </button>
+    </form>
+
+    <!-- Messages Flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}" role="alert">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Filtrage -->
+    <form method="GET" action="{{ url_for('fournisseurs.fournisseurs') }}">
+        <div class="form-row mb-3">
+            <div class="col-md-3 mb-2">
+                <input type="text" name="article" class="form-control"
+                       placeholder="Rechercher un article..." value="{{ request.args.get('article','') }}">
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="text" name="code_article" class="form-control"
+                       placeholder="Rechercher un code article..." value="{{ request.args.get('code_article','') }}">
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="module" class="form-control">
+                    <option value="">Module</option>
+                    {% for val in modules %}
+                        <option value="{{ val }}" {% if request.args.get('module')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="libelle_departement" class="form-control">
+                    <option value="">Département</option>
+                    {% for val in departements %}
+                        <option value="{{ val }}" {% if request.args.get('libelle_departement')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="libelle_rayon" class="form-control">
+                    <option value="">Rayon</option>
+                    {% for val in rayons %}
+                        <option value="{{ val }}" {% if request.args.get('libelle_rayon')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="code_marque" class="form-control">
+                    <option value="">Code marque</option>
+                    {% for val in codes_marque %}
+                        <option value="{{ val }}" {% if request.args.get('code_marque')==val %}selected{% endif %}>
+                            {{ val }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="fournisseur" class="form-control">
+                    <option value="">Filtrer par fournisseur</option>
+                    {% for fournisseur in fournisseurs_uniques %}
+                        <option value="{{ fournisseur }}"
+                                {% if request.args.get('fournisseur')==fournisseur %}selected{% endif %}>
+                            {{ fournisseur }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <select name="pcb_commandable" class="form-control">
+                    <option value="" {% if request.args.get('pcb_commandable','')=='' %}selected{% endif %}>
+                        Tous
+                    </option>
+                    <option value="O" {% if request.args.get('pcb_commandable')=='O' %}selected{% endif %}>
+                        Commandable (O)
+                    </option>
+                    <option value="N" {% if request.args.get('pcb_commandable')=='N' %}selected{% endif %}>
+                        Non commandable (N)
+                    </option>
+                </select>
+            </div>
+
+            <div class="col-md-12 mb-3">
+                <label for="colonnes">Colonnes à afficher :</label>
+                <select name="colonnes" id="colonnes" multiple class="form-control select2">
+                    {% for col in colonnes_standards + colonnes_optionnelles %}
+                        <option value="{{ col }}" {% if col in selected_columns %}selected{% endif %}>
+                            {{ col.replace('_',' ').capitalize() }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="form-text text-muted">
+                    Utilisez Ctrl/Cmd + clic pour sélectionner plusieurs colonnes.
+                </small>
+            </div>
+
+            <div class="col-md-3 mb-2">
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">Valider</button>
+                    <a href="{{ url_for('fournisseurs.fournisseurs') }}" class="btn btn-secondary">
+                        Réinitialiser
+                    </a>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if ref_frs_rows %}
+    <table class="table table-bordered table-sm">
+        <thead class="thead-light">
+        <tr>
+            {% for col in selected_columns %}
+                <th>{{ col.replace('_',' ').capitalize() }}</th>
+            {% endfor %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for row in ref_frs_rows %}
+            <tr>
+                {% for cell in row %}
+                    <td>{{ cell }}</td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination moderne -->
+    <nav aria-label="Pagination">
+        <form method="GET" action="{{ url_for('fournisseurs.fournisseurs') }}" class="form-inline justify-content-center mt-3">
+            {% for key, values in request.args.lists() %}
+                {% if key != 'page' %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+
+            <div class="btn-group mr-2">
+                {% if page > 1 %}
+                    <button type="submit" name="page" value="{{ page - 1 }}" class="btn btn-outline-primary">←</button>
+                {% else %}
+                    <button type="button" class="btn btn-outline-secondary" disabled>←</button>
+                {% endif %}
+            </div>
+            <span class="mx-2 align-self-center">Page</span>
+            <input type="number" name="page" min="1" max="{{ total_pages }}" value="{{ page }}" class="form-control form-control-sm mx-1" style="width: 70px;">
+            <span class="mx-2 align-self-center">sur {{ total_pages }}</span>
+            <div class="btn-group ml-2">
+                {% if page < total_pages %}
+                    <button type="submit" name="page" value="{{ page + 1 }}" class="btn btn-outline-primary">→</button>
+                {% else %}
+                    <button type="button" class="btn btn-outline-secondary" disabled>→</button>
+                {% endif %}
+            </div>
+        </form>
+    </nav>
+
+    {% else %}
+    <div class="alert alert-warning">Aucune donnée trouvée pour les filtres appliqués.</div>
+    {% endif %}
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('.select2').select2({
+            width: '100%',
+            placeholder: "Colonnes à afficher"
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Aide à la commande - Analyse des ventes</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #fafbfc;
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        /* HIÉRARCHIE SANS PROGRESSION DE TAILLE - POLICE UNIFORME */
+        .niveau-1, .niveau-2, .niveau-3, .niveau-4, .niveau-5 { 
+            font-size: 0.9em; 
+            font-weight: 500;
+        }
+        .niveau-2 { 
+            padding-left: 20px;
+        }
+        .niveau-3 { 
+            padding-left: 40px;
+        }
+        .niveau-4 { 
+            padding-left: 60px;
+        }
+        .niveau-5 { 
+            padding-left: 80px;
+        }
+        
+        /* COULEURS UNIQUEMENT SUR LA POLICE POUR LES ARTICLES */
+        .niveau-5.progression { 
+            color: #28a745 !important;
+            background-color: transparent !important;
+            border: none !important;
+        }
+        .niveau-5.regression { 
+            color: #dc3545 !important;
+            background-color: transparent !important;
+            border: none !important;
+        }
+        .niveau-5.stable {
+            color: #856404 !important;
+            background-color: transparent !important;
+            border: none !important;
+        }
+        
+        .container-fluid { 
+            background-color: white; 
+            border-radius: 8px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin: 15px auto;
+            padding: 30px;
+            max-width: 95%;
+        }
+        
+        /* INDICATEURS DISCRETS - Pas pour les articles */
+        .niveau-1.progression,
+        .niveau-2.progression,
+        .niveau-3.progression,
+        .niveau-4.progression { 
+            background-color: #f8fff8 !important; 
+            border-left: 3px solid #28a745;
+        }
+        .niveau-1.regression,
+        .niveau-2.regression,
+        .niveau-3.regression,
+        .niveau-4.regression { 
+            background-color: #fff8f8 !important; 
+            border-left: 3px solid #dc3545;
+        }
+        .niveau-1.stable,
+        .niveau-2.stable,
+        .niveau-3.stable,
+        .niveau-4.stable {
+            background-color: #fffef8 !important;
+            border-left: 3px solid #ffc107;
+        }
+        
+        /* NAVIGATION ÉPURÉE */
+        .niveau-suivant { 
+            color: #495057 !important;
+            text-decoration: none !important;
+            transition: color 0.2s ease;
+            display: inline-block;
+        }
+        .niveau-suivant:hover { 
+            color: #007bff !important;
+        }
+        
+        /* ICÔNES MINIMALISTES */
+        .expand-icon {
+            font-size: 0.8em;
+            margin-right: 8px;
+            color: #6c757d;
+            transition: color 0.2s ease;
+        }
+        .niveau-suivant:hover .expand-icon {
+            color: #007bff;
+        }
+        .niveau-suivant.loading .expand-icon {
+            color: #17a2b8;
+            animation: rotate 1s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* TABLEAUX PROPRES - CENTRAGE DES DONNÉES */
+        .table {
+            border: none;
+            margin-bottom: 0;
+        }
+        .table th {
+            background-color: #f8f9fa;
+            color: #495057;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-top: none;
+            border-bottom: 2px solid #dee2e6;
+            padding: 15px 12px;
+            text-align: center;
+        }
+        .table td {
+            padding: 12px;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f3f4;
+            text-align: center;
+        }
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* PREMIÈRE COLONNE ALIGNÉE À GAUCHE */
+        .table th:first-child,
+        .table td:first-child {
+            text-align: left;
+        }
+        
+        /* FORMULAIRE SIMPLE */
+        .filter-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid #e9ecef;
+        }
+        .form-control {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.2s ease;
+        }
+        .form-control:focus {
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.1rem rgba(0, 123, 255, 0.25);
+        }
+        
+        /* BADGES SUBTILS */
+        .evolution-badge {
+            font-size: 0.75em;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .evolution-positive { 
+            background-color: #d4edda; 
+            color: #155724; 
+        }
+        .evolution-negative { 
+            background-color: #f8d7da; 
+            color: #721c24; 
+        }
+        .evolution-stable { 
+            background-color: #fff3cd; 
+            color: #856404; 
+        }
+        
+        /* CODE ARTICLE ÉPURÉ */
+        .article-code {
+            background-color: #f8f9fa;
+            color: #495057;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-right: 12px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .article-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .article-libelle {
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+        
+        /* HEADER SIMPLE */
+        .page-header {
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+        }
+        .page-title {
+            color: #495057;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .page-subtitle {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 0;
+        }
+        
+        /* TOTAUX DISCRETS */
+        .total-row {
+            background-color: #f8f9fa !important;
+            font-weight: 600;
+            border-top: 2px solid #dee2e6;
+        }
+        
+        /* RESPONSIVE AMÉLIORÉ */
+        @media (max-width: 768px) {
+            .niveau-2, .niveau-3, .niveau-4, .niveau-5 {
+                padding-left: 15px !important;
+            }
+            .container-fluid {
+                margin: 10px;
+                padding: 20px;
+            }
+            .table th, .table td {
+                padding: 8px 6px;
+                font-size: 0.85em;
+            }
+        }
+        
+        /* SOUS-NIVEAUX */
+        .sous-niveau td { 
+            padding: 0 !important; 
+            border: none !important;
+        }
+        
+        /* BOUTON SIMPLE */
+        .btn-simple {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .btn-simple:hover {
+            background-color: #0056b3;
+            border-color: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        /* ACTION BUTTONS DISCRETS */
+        .action-buttons {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .action-buttons .btn {
+            margin-left: 8px;
+            border-radius: 20px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            width: 40px;
+            height: 40px;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <!-- En-tête épuré -->
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="fas fa-chart-line text-primary mr-2"></i>
+            Aide à la commande
+        </h1>
+        <p class="page-subtitle">
+            Analyse des ventes - Semaines {{ semaine_debut }} à {{ semaine_fin }}, {{ selected_annee }}
+        </p>
+    </div>
+
+    <!-- Formulaire simplifié -->
+    <div class="filter-section">
+        <form method="get" class="row align-items-end">
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Année</label>
+                <input type="number" name="annee" class="form-control" value="{{ selected_annee }}" min="2020" max="2030">
+            </div>
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Semaine début</label>
+                <input type="number" name="semaine_debut" class="form-control" value="{{ semaine_debut }}" min="1" max="52">
+            </div>
+            <div class="col-md-2">
+                <label class="font-weight-medium mb-1">Semaine fin</label>
+                <input type="number" name="semaine_fin" class="form-control" value="{{ semaine_fin }}" min="1" max="52">
+            </div>
+            <div class="col-md-3">
+                <label class="font-weight-medium mb-1">Indicateur</label>
+                <select name="indicateur" class="form-control">
+                    <option value="ca" {% if indicateur == 'ca' %}selected{% endif %}>Chiffre d'affaires</option>
+                    <option value="qte" {% if indicateur == 'qte' %}selected{% endif %}>Quantités</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-simple btn-block">
+                    <i class="fas fa-search mr-1"></i>Analyser
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Informations discrètes -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <small class="text-muted">
+                <i class="fas fa-info-circle mr-1"></i>
+                Cliquez sur un élément pour explorer le niveau suivant. 
+                <span class="evolution-positive">Vert: +5%</span> · 
+                <span class="evolution-stable">Jaune: ±5%</span> · 
+                <span class="evolution-negative">Rouge: -5%</span>
+            </small>
+        </div>
+    </div>
+
+    <!-- Tableau principal épuré -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+            <h6 class="mb-0 text-muted">
+                <i class="fas fa-building mr-2"></i>
+                Départements ({{ groupes|length }})
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th style="width: 25%;">Département</th>
+                        {% for s in semaines %}
+                            <th>S{{ s }}</th>
+                        {% endfor %}
+                        <th>Total</th>
+                        <th>Évolution</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for g in groupes %}
+                    <tr class="niveau-1 {% if g['VAR_%'] > 5 %}progression{% elif g['VAR_%'] < -5 %}regression{% else %}stable{% endif %}">
+                        <td>
+                            <a href="#" class="niveau-suivant"
+                               data-niveau="departement"
+                               data-parent-value="{{ g[label_field] }}"
+                               data-target-id="dept_{{ loop.index }}">
+                                <i class="fas fa-plus-circle expand-icon"></i>
+                                {{ g[label_field] }}
+                            </a>
+                        </td>
+                        {% for s in semaines %}
+                            <td>
+                                {% if indicateur == 'ca' %}
+                                    {{ "{:,.0f}".format(g[s]) }}€
+                                {% else %}
+                                    {{ "{:,.0f}".format(g[s]) }}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                        <td class="font-weight-medium">
+                            {% if indicateur == 'ca' %}
+                                {{ "{:,.0f}".format(g['TOTAL']) }}€
+                            {% else %}
+                                {{ "{:,.0f}".format(g['TOTAL']) }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="evolution-badge {% if g['VAR_%'] > 5 %}evolution-positive{% elif g['VAR_%'] < -5 %}evolution-negative{% else %}evolution-stable{% endif %}">
+                                {% if g['VAR_%'] > 0 %}+{% endif %}{{ g['VAR_%']|round(1) }}%
+                            </span>
+                        </td>
+                    </tr>
+                    <tr class="sous-niveau d-none" id="dept_{{ loop.index }}">
+                        <td colspan="{{ semaines|length + 3 }}" class="p-0 border-0"></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                    <tfoot>
+                    <tr class="total-row">
+                        <td><strong>Total général</strong></td>
+                        {% for s in semaines %}
+                            <td>
+                                <strong>
+                                    {% if indicateur == 'ca' %}
+                                        {{ "{:,.0f}".format(total_par_semaine[s]) }}€
+                                    {% else %}
+                                        {{ "{:,.0f}".format(total_par_semaine[s]) }}
+                                    {% endif %}
+                                </strong>
+                            </td>
+                        {% endfor %}
+                        <td>
+                            <strong>
+                                {% if indicateur == 'ca' %}
+                                    {{ "{:,.0f}".format(total_general) }}€
+                                {% else %}
+                                    {{ "{:,.0f}".format(total_general) }}
+                                {% endif %}
+                            </strong>
+                        </td>
+                        <td>
+                            <strong>{{ total_var|round(1) }}%</strong>
+                        </td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Boutons d'action discrets -->
+<div class="action-buttons">
+    <button type="button" class="btn btn-secondary" onclick="collapseAll()" title="Replier tout">
+        <i class="fas fa-compress"></i>
+    </button>
+    <button type="button" class="btn btn-info" onclick="window.print()" title="Imprimer">
+        <i class="fas fa-print"></i>
+    </button>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Navigation épurée
+$(document).on("click", ".niveau-suivant", function (e) {
+    e.preventDefault();
+    
+    const btn = $(this);
+    const niveau = btn.data("niveau");
+    const parentValue = btn.data("parent-value");
+    const targetId = "#" + btn.data("target-id");
+    const icon = btn.find('.expand-icon');
+
+    // Toggle ouverture/fermeture
+    if (!$(targetId).hasClass("d-none")) {
+        $(targetId).slideUp(200, function() {
+            $(this).addClass("d-none").html('<td colspan="100%"></td>');
+        });
+        icon.removeClass("fa-minus-circle").addClass("fa-plus-circle");
+        btn.removeClass("loading");
+        return;
+    }
+
+    // Chargement
+    icon.removeClass("fa-plus-circle fa-minus-circle").addClass("fa-spinner fa-spin");
+    btn.addClass("loading");
+
+    const baseUrl = "{{ url_for('analyse_vente.ajax_niveau') }}";
+    const params = {
+        niveau: niveau,
+        parent_value: parentValue,
+        annee: {{ selected_annee }},
+        semaine_debut: {{ semaine_debut }},
+        semaine_fin: {{ semaine_fin }},
+        indicateur: "{{ indicateur }}"
+    };
+
+    $.get(baseUrl, params)
+        .done(function (data) {
+            console.log("HTML reçu:", data.substring(0, 200)); // DEBUG
+            $(targetId).html('<td colspan="100%" class="p-2">' + data + '</td>')
+                      .removeClass("d-none")
+                      .hide()
+                      .slideDown(200);
+            icon.removeClass("fa-spinner fa-spin").addClass("fa-minus-circle");
+            btn.removeClass("loading");
+        })
+        .fail(function(xhr, status, error) {
+            $(targetId).html('<td colspan="100%"><div class="alert alert-warning m-2">Erreur de chargement</div></td>')
+                      .removeClass("d-none");
+            icon.removeClass("fa-spinner fa-spin").addClass("fa-exclamation-circle");
+            btn.removeClass("loading");
+        });
+});
+
+function collapseAll() {
+    $('.sous-niveau:not(.d-none)').slideUp(200, function() {
+        $(this).addClass('d-none').html('<td colspan="100%"></td>');
+    });
+    $('.expand-icon').removeClass('fa-minus-circle fa-spinner fa-spin fa-exclamation-circle').addClass('fa-plus-circle');
+    $('.niveau-suivant').removeClass('loading');
+}
+
+// Soumission formulaire
+$('form').on('submit', function() {
+    $(this).find('button[type="submit"]').html('<i class="fas fa-spinner fa-spin mr-1"></i>Chargement...');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 text-muted">
+            <i class="fas fa-{% if niveau == 'rayon' %}layer-group{% elif niveau == 'famille' %}tags{% elif niveau == 'libelle_sous_famille' %}tag{% else %}cube{% endif %} mr-2"></i>
+            {% if niveau == 'rayon' %}Rayons{% elif niveau == 'famille' %}Familles{% elif niveau == 'libelle_sous_famille' %}Sous-familles{% else %}Articles{% endif %} 
+            ({{ groupes|length }})
+        </h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                <tr>
+                    <th style="width: 25%;">
+                        {% if niveau == 'rayon' %}Rayon{% elif niveau == 'famille' %}Famille{% elif niveau == 'libelle_sous_famille' %}Sous-famille{% else %}Article{% endif %}
+                    </th>
+                    {% for s in semaines %}
+                        <th>S{{ s }}</th>
+                    {% endfor %}
+                    <th>Total</th>
+                    <th>Évolution</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for g in groupes %}
+                <tr class="
+                    {% if niveau == 'rayon' %}niveau-2{% elif niveau == 'famille' %}niveau-3{% elif niveau == 'libelle_sous_famille' %}niveau-4{% elif niveau == 'code_article' %}niveau-5{% endif %}
+                    {% if g['VAR_%'] > 5 %}progression{% elif g['VAR_%'] < -5 %}regression{% else %}stable{% endif %}
+                ">
+                    <td>
+                        {% if niveau != 'code_article' %}
+                            <a href="#" class="niveau-suivant"
+                               data-niveau="{{ niveau }}"
+                               data-parent-value="{{ g[label_field] }}"
+                               data-target-id="sous{{ niveau }}_{{ loop.index }}">
+                                <i class="fas fa-plus-circle expand-icon"></i>
+                                {{ g[label_field] }}
+                            </a>
+                        {% else %}
+                            <div class="article-info">
+                                <span class="article-code">{{ g[niveau] }}</span>
+                                <span class="article-libelle">{{ g[label_field] }}</span>
+                            </div>
+                        {% endif %}
+                    </td>
+                    {% for s in semaines %}
+                        <td>
+                            {% if request.args.get('indicateur') == 'ca' %}
+                                {{ "{:,.0f}".format(g[s]) }}€
+                            {% else %}
+                                {{ "{:,.0f}".format(g[s]) }}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                    <td class="font-weight-medium">
+                        {% if request.args.get('indicateur') == 'ca' %}
+                            {{ "{:,.0f}".format(g['TOTAL']) }}€
+                        {% else %}
+                            {{ "{:,.0f}".format(g['TOTAL']) }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="evolution-badge {% if g['VAR_%'] > 5 %}evolution-positive{% elif g['VAR_%'] < -5 %}evolution-negative{% else %}evolution-stable{% endif %}">
+                            {% if g['VAR_%'] > 0 %}+{% endif %}{{ g['VAR_%']|round(1) }}%
+                        </span>
+                    </td>
+                </tr>
+                {% if niveau != 'code_article' %}
+                <tr class="sous-niveau d-none" id="sous{{ niveau }}_{{ loop.index }}">
+                    <td colspan="{{ semaines|length + 3 }}" class="p-0 border-0"></td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
