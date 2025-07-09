@@ -452,7 +452,8 @@
                                     </td>
                                     <td class="text-center">
                                         {% if niveau != 'code_article' %}
-                                        <a href="{{ url_for('commande_vente.commande_vente', niveau=next_niveau, parent_filter=item.libelle, **request.args) }}" 
+                                       
+                                        <a href="{{ url_for('commande_vente.commande_vente', niveau=next_niveau, parent_filter=item.libelle, annee=selected_annee, semaine_debut=semaine_debut, semaine_fin=semaine_fin, methode=methode) }}"
                                            class="btn btn-sm btn-outline-primary" 
                                            title="Voir le détail">
                                             <i class="fas fa-search-plus"></i>

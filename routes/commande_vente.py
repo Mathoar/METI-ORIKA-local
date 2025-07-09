@@ -12,16 +12,35 @@ commande_vente_bp = Blueprint('commande_vente', __name__, url_prefix='/commande_
 
 @commande_vente_bp.route('/')
 def commande_vente():
-    # Paramètres de filtrage
-    annee = int(request.args.get('annee', 2025))
-    semaine_debut = int(request.args.get('semaine_debut', 1))
-    semaine_fin = int(request.args.get('semaine_fin', 52))
+    # Fonctions utilitaires pour conversion sécurisée
+    def safe_int(value, default):
+        """Convertit de manière sécurisée une valeur en entier"""
+        if value is None or value == '':
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_float(value, default):
+        """Convertit de manière sécurisée une valeur en float"""
+        if value is None or value == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    # Paramètres de filtrage avec conversion sécurisée
+    annee = safe_int(request.args.get('annee'), 2025)
+    semaine_debut = safe_int(request.args.get('semaine_debut'), 1)
+    semaine_fin = safe_int(request.args.get('semaine_fin'), 52)
     niveau = request.args.get('niveau', 'departement')
     methode = request.args.get('methode', 'moyenne')
     
-    # Paramètres de calcul
-    coverage = int(request.args.get('coverage', 21))  # Couverture cible en jours
-    safety = float(request.args.get('safety', 1.2))  # Coefficient de sécurité
+    # Paramètres de calcul avec conversion sécurisée
+    coverage = safe_int(request.args.get('coverage'), 21)  # Couverture cible en jours
+    safety = safe_float(request.args.get('safety'), 1.2)  # Coefficient de sécurité
     
     # Filtres hiérarchiques
     parent_filter = request.args.get('parent_filter')
@@ -160,15 +179,31 @@ def export_commande():
 @commande_vente_bp.route('/ajax_recalcul')
 def ajax_recalcul():
     """Recalcule les suggestions avec de nouveaux paramètres"""
+    def safe_int(value, default):
+        if value is None or value == '':
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_float(value, default):
+        if value is None or value == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
     try:
-        # Récupérer tous les paramètres
-        annee = int(request.args.get('annee'))
-        semaine_debut = int(request.args.get('semaine_debut'))
-        semaine_fin = int(request.args.get('semaine_fin'))
-        niveau = request.args.get('niveau')
-        methode = request.args.get('methode')
-        coverage = int(request.args.get('coverage', 21))
-        safety = float(request.args.get('safety', 1.2))
+        # Récupérer tous les paramètres avec conversion sécurisée
+        annee = safe_int(request.args.get('annee'), 2025)
+        semaine_debut = safe_int(request.args.get('semaine_debut'), 1)
+        semaine_fin = safe_int(request.args.get('semaine_fin'), 52)
+        niveau = request.args.get('niveau', 'departement')
+        methode = request.args.get('methode', 'moyenne')
+        coverage = safe_int(request.args.get('coverage'), 21)
+        safety = safe_float(request.args.get('safety'), 1.2)
         
         # Récupérer les filtres si présents
         parent_filter = request.args.get('parent_filter')
@@ -246,15 +281,31 @@ def details_commande(commande_id):
 @commande_vente_bp.route('/ajax_suggestions')
 def ajax_suggestions():
     """Retourne les suggestions pour un sous-niveau (AJAX)"""
+    def safe_int(value, default):
+        if value is None or value == '':
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_float(value, default):
+        if value is None or value == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
     try:
-        # Paramètres de base
-        annee = int(request.args.get('annee', 2025))
-        semaine_debut = int(request.args.get('semaine_debut', 1))
-        semaine_fin = int(request.args.get('semaine_fin', 52))
-        niveau = request.args.get('niveau')
+        # Paramètres de base avec conversion sécurisée
+        annee = safe_int(request.args.get('annee'), 2025)
+        semaine_debut = safe_int(request.args.get('semaine_debut'), 1)
+        semaine_fin = safe_int(request.args.get('semaine_fin'), 52)
+        niveau = request.args.get('niveau', 'departement')
         methode = request.args.get('methode', 'moyenne')
-        coverage = int(request.args.get('coverage', 21))
-        safety = float(request.args.get('safety', 1.2))
+        coverage = safe_int(request.args.get('coverage'), 21)
+        safety = safe_float(request.args.get('safety'), 1.2)
         
         # Filtre parent
         parent_filter = request.args.get('parent_filter')
@@ -292,18 +343,44 @@ def ajax_suggestions():
         
     except Exception as e:
         print(f"Erreur dans ajax_suggestions: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 400
+
 @commande_vente_bp.route('/articles')
 def commande_articles():
     """Vue orientée articles/fournisseurs avec performances"""
     from services.commande_article_fournisseur import get_suggestions_articles_fournisseurs, get_top_fournisseurs
     
-    # Paramètres
-    annee = int(request.args.get('annee', 2025))
-    semaine_debut = int(request.args.get('semaine_debut', 1))
-    semaine_fin = int(request.args.get('semaine_fin', 27))
+    # Paramètres avec gestion sécurisée des conversions
+    def safe_int(value, default):
+        """Convertit de manière sécurisée une valeur en entier"""
+        if value is None or value == '':
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_float(value, default):
+        """Convertit de manière sécurisée une valeur en float"""
+        if value is None or value == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    # Paramètres avec valeurs par défaut sécurisées
+    annee = safe_int(request.args.get('annee'), 2025)
+    semaine_debut = safe_int(request.args.get('semaine_debut'), 1)
+    semaine_fin = safe_int(request.args.get('semaine_fin'), 27)
     methode = request.args.get('methode', 'moyenne')
-    coverage = int(request.args.get('coverage', 21))
-    safety = float(request.args.get('safety', 1.2))
+    coverage = safe_int(request.args.get('coverage'), 21)
+    safety = safe_float(request.args.get('safety'), 1.2)
     
     # Filtres
     filtres = {}
@@ -326,10 +403,10 @@ def commande_articles():
         # Calculer les statistiques
         stats = {
             'total_articles': len(suggestions),
-            'articles_rupture': sum(1 for s in suggestions if s['rupture']),
-            'articles_stock_faible': sum(1 for s in suggestions if s['stock_faible']),
-            'montant_total': sum(s['montant_estime'] for s in suggestions if s['selected']),
-            'fournisseurs_uniques': len(set(s['fournisseur'] for s in suggestions))
+            'articles_rupture': sum(1 for s in suggestions if s.get('rupture', False)),
+            'articles_stock_faible': sum(1 for s in suggestions if s.get('stock_faible', False)),
+            'montant_total': sum(s.get('montant_estime', 0) for s in suggestions if s.get('selected', False)),
+            'fournisseurs_uniques': len(set(s.get('fournisseur', '') for s in suggestions if s.get('fournisseur')))
         }
         
         return render_template(
@@ -353,8 +430,21 @@ def commande_articles():
         return render_template(
             "commande_articles.html",
             suggestions=[],
-            stats={},
+            stats={
+                'total_articles': 0,
+                'articles_rupture': 0,
+                'articles_stock_faible': 0,
+                'montant_total': 0,
+                'fournisseurs_uniques': 0
+            },
             top_fournisseurs=[],
+            annee=annee,
+            semaine_debut=semaine_debut,
+            semaine_fin=semaine_fin,
+            methode=methode,
+            coverage=coverage,
+            safety=safety,
+            filtres=filtres,
             error=str(e)
         )
 

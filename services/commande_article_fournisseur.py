@@ -160,6 +160,7 @@ def get_suggestions_articles_fournisseurs(annee, semaine_debut, semaine_fin, met
             forte_rotation = vente_moyenne_hebdo > 50
             forte_marge = marge > 30
             recommande = rupture or stock_faible or (forte_rotation and forte_marge) or tendance > 20
+
             
             suggestions.append({
                 'id': str(abs(hash(f"{code_article}_{fournisseur}"))),
@@ -185,12 +186,12 @@ def get_suggestions_articles_fournisseurs(annee, semaine_debut, semaine_fin, met
                 'marge': round(marge, 1),
                 'montant_estime': round(quantite_suggeree_pcb * prix_tarif, 0),
                 'performance_score': round(performance_score, 2),
-                'rupture': rupture,
-                'stock_faible': stock_faible,
-                'forte_rotation': forte_rotation,
-                'forte_marge': forte_marge,
-                'recommande': recommande,
-                'selected': recommande,
+                'rupture': int(rupture),  # Convertir en entier
+                'stock_faible': int(stock_faible),  # Convertir en entier
+                'forte_rotation': int(forte_rotation),  # Convertir en entier
+                'forte_marge': int(forte_marge),  # Convertir en entier
+                'recommande': int(recommande),  # Convertir en entier
+                'selected': int(recommande),  # Convertir en entier
                 'nb_semaines_vente': nb_semaines
             })
         

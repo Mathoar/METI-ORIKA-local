@@ -161,6 +161,25 @@
         .perf-score-high { background: #28a745; color: white; }
         .perf-score-medium { background: #ffc107; color: #333; }
         .perf-score-low { background: #dc3545; color: white; }
+        
+        /* Notifications */
+        .notification-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            min-width: 300px;
+        }
+        
+        /* États des stocks */
+        .stock-modified {
+            border-color: #ffc107 !important;
+            background-color: #fff3cd;
+        }
+        .stock-saved {
+            border-color: #28a745 !important;
+            background-color: #d4edda;
+        }
     </style>
 </head>
 <body>
@@ -315,12 +334,12 @@
                     </thead>
                     <tbody>
                         {% for item in suggestions %}
-                        <tr class="{% if item.rupture %}stock-rupture{% elif item.stock_faible %}stock-faible{% endif %}">
+                        <tr class="{% if item.rupture == 1 %}stock-rupture{% elif item.stock_faible == 1 %}stock-faible{% endif %}">
                             <td>
                                 <input type="checkbox" class="item-select" 
                                        data-id="{{ item.id }}"
                                        data-montant="{{ item.montant_estime }}"
-                                       {% if item.selected %}checked{% endif %}>
+                                       {% if item.selected == 1 %}checked{% endif %}>
                             </td>
                             <td>
                                 <code>{{ item.code }}</code>
@@ -329,12 +348,12 @@
                                 <strong>{{ item.libelle }}</strong>
                                 <div class="small text-muted">
                                     {{ item.departement }} > {{ item.rayon }}
-                                    {% if item.rupture %}
+                                    {% if item.rupture == 1 %}
                                         <span class="badge badge-danger ml-2">Rupture</span>
-                                    {% elif item.stock_faible %}
+                                    {% elif item.stock_faible == 1 %}
                                         <span class="badge badge-warning ml-2">Stock faible</span>
                                     {% endif %}
-                                    {% if item.forte_rotation %}
+                                    {% if item.forte_rotation == 1 %}
                                         <span class="badge badge-info ml-2">Forte rotation</span>
                                     {% endif %}
                                 </div>
@@ -478,8 +497,8 @@
 
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 <script>
-// Variables globales
-const suggestions = {{ suggestions|tojson }};
+// Variables globales - Correction pour gérer les entiers au lieu des booléens
+const suggestions = {{ suggestions|safe }};
 
 // Sélection globale
 $('#selectAll').change(function() {
@@ -564,7 +583,7 @@ function updateStock(id) {
         $('#sugg_' + id).text(suggPCB.toLocaleString());
         
         // Marquer comme modifié
-        $('#stock_' + id).addClass('border-warning');
+        $('#stock_' + id).addClass('border-warning stock-modified');
     }
 }
 
@@ -635,7 +654,7 @@ function exportOrder() {
 // Sauvegarde des stocks
 function saveAllStocks() {
     const stocks = [];
-    $('.stock-input.border-warning').each(function() {
+    $('.stock-input.stock-modified').each(function() {
         const id = $(this).attr('id').replace('stock_', '');
         const item = suggestions.find(s => s.id === id);
         if (item) {
@@ -658,15 +677,47 @@ function saveAllStocks() {
         contentType: 'application/json',
         data: JSON.stringify({ stocks: stocks }),
         success: function() {
-            $('.stock-input').removeClass('border-warning');
-            alert('Stocks sauvegardés!');
+            $('.stock-input').removeClass('stock-modified border-warning').addClass('stock-saved');
+            setTimeout(() => {
+                $('.stock-saved').removeClass('stock-saved');
+            }, 2000);
+            showNotification('Stocks sauvegardés!', 'success');
+        },
+        error: function() {
+            showNotification('Erreur lors de la sauvegarde', 'error');
         }
     });
+}
+
+// Fonction pour afficher les notifications
+function showNotification(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : 
+                      type === 'error' ? 'alert-danger' : 'alert-info';
+    
+    const notification = $(`
+        <div class="alert ${alertClass} alert-dismissible fade show notification-toast" role="alert">
+            ${message}
+            <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+            </button>
+        </div>
+    `);
+    
+    $('body').append(notification);
+    
+    setTimeout(() => {
+        notification.alert('close');
+    }, 3000);
 }
 
 // Initialisation
 $(document).ready(function() {
     updateSummary();
+    
+    // Correction pour traiter les entiers au lieu des booléens
+    console.log('Suggestions chargées:', suggestions.length);
+    console.log('Articles en rupture:', suggestions.filter(s => s.rupture === 1).length);
+    console.log('Articles stock faible:', suggestions.filter(s => s.stock_faible === 1).length);
 });
 </script>
 </body>

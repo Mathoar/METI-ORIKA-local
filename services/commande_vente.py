@@ -221,12 +221,12 @@ def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode,
             # Calcul de la tendance
             tendance = 0
             if nb_semaines >= 2:
-                debut = ventes_par_semaine.iloc[:nb_semaines//2].mean()
-                fin = ventes_par_semaine.iloc[nb_semaines//2:].mean()
+                debut = ventes_semaine.iloc[:nb_semaines//2].mean()
+                fin = ventes_semaine.iloc[nb_semaines//2:].mean()
                 if debut > 0:
                     tendance = ((fin - debut) / debut) * 100
             
-            # Déterminer les alertes
+            ## Déterminer les alertes - Convertir en entiers
             rupture = stock_actuel == 0 and vente_moyenne_jour > 0
             stock_faible = couverture_actuelle < 7 and not rupture
             recommande = (tendance > 10) or rupture or stock_faible
@@ -254,10 +254,10 @@ def get_suggestions_commande(annee, semaine_debut, semaine_fin, niveau, methode,
                 'montant_estime': montant_estime,
                 'fournisseurs': fournisseurs,
                 'nb_articles': nb_articles if niveau != 'code_article' else 1,
-                'rupture': rupture,
-                'stock_faible': stock_faible,
-                'recommande': recommande,
-                'selected': recommande
+                'rupture': int(rupture),  # Convertir en entier
+                'stock_faible': int(stock_faible),  # Convertir en entier
+                'recommande': int(recommande),  # Convertir en entier
+                'selected': int(recommande)  # Convertir en entier
             })
         
         # Trier par montant estimé décroissant
